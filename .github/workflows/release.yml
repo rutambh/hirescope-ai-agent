@@ -1,0 +1,107 @@
+# .github/workflows/release.yml
+name: Build and Release to Play Store (Free)
+
+on:
+  push:
+    branches:
+      - main # Trigger build on push to main branch
+
+permissions:
+  contents: write # Allows GITHUB_TOKEN to commit the version bump back to Git
+
+jobs:
+  release:
+    name: Build & Submit Android App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Auto-increment Version in app.json
+        run: node scripts/bump-version.js
+
+      - name: Commit and Push Version Bump
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.json
+          git commit -m "chore: bump version [skip ci]" || echo "No changes to commit"
+          git push
+
+      - name: Generate Native Android Project
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Decode Keystore
+        run: |
+          echo '${{ secrets.ANDROID_KEYSTORE_BASE64 }}' | base64 --decode > android/app/rutambhapps.jks
+
+      - name: Configure signing in build.gradle
+        run: |
+          cat << 'EOF' > configure-signing.js
+          const fs = require('fs');
+          const file = 'android/app/build.gradle';
+          let content = fs.readFileSync(file, 'utf8');
+
+          console.log("Applying build.gradle signing configuration modifications...");
+
+          // 1. Insert release block inside signingConfigs right before debug {
+          content = content.replace('debug {', `release {
+                      storeFile file("rutambhapps.jks")
+                      storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                      keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+                  }
+                  debug {`);
+
+          // 2. Force buildTypes.release to use release signing config
+          content = content.replace(/release\s*\{([^}]*?)signingConfig\s*signingConfigs\.debug/, 'release {$1signingConfig signingConfigs.release');
+
+          fs.writeFileSync(file, content);
+          
+          // Strict Verification check
+          const updatedContent = fs.readFileSync(file, 'utf8');
+          if (!updatedContent.includes("rutambhapps.jks") || 
+              !updatedContent.includes("signingConfig signingConfigs.release") || 
+              updatedContent.includes("MYAPP_RELEASE_STORE_FILE")) {
+              console.error("Error: Verification failed! build.gradle signing configuration was not correctly set up.");
+              process.exit(1);
+          }
+          console.log("Verified and modified build.gradle signing configuration successfully.");
+          EOF
+          node configure-signing.js
+
+      - name: Build and Sign Android App Bundle (AAB)
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease
+
+      - name: Upload to Google Play Store
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          packageName: com.rutambh.hirescope
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: internal # Options: "internal", "alpha", "beta", "production"
+          whatsNewDirectory: whatsnew/
