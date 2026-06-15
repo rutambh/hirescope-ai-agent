@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   Alert,
   useColorScheme,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useHistoryStore } from '../../src/store/historyStore';
 import { useSearchStore } from '../../src/store/searchStore';
 import { useScraper } from '../../src/hooks/useScraper';
@@ -17,7 +19,7 @@ import { HistoryCard } from '../../src/components/HistoryCard';
 import { ProgressBar } from '../../src/components/ProgressBar';
 import { SearchRecord } from '../../src/types';
 import { useAppStore } from '../../src/store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../../src/constants/theme';
+import { LightColors, DarkColors, Spacing, Radius, Shadows } from '../../src/constants/theme';
 
 export default function HistoryScreen() {
   const router = useRouter();
@@ -81,124 +83,160 @@ export default function HistoryScreen() {
   const isResearching = phase === 'searching' || phase === 'extracting';
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: c.bg }]} edges={['top']}>
-      <View style={[styles.header, { borderBottomColor: c.border }]}>
-        <View style={{ width: 40 }} />
-        <Text style={[styles.title, { color: c.text }]}>Research History</Text>
-        <TouchableOpacity
-          onPress={() => router.push('/settings')}
-          style={[styles.settingsBtn, { backgroundColor: c.surface, borderColor: c.border }]}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.settingsIcon}>⚙️</Text>
-        </TouchableOpacity>
-      </View>
-
-      {isResearching && filters && (
-        <View style={[styles.progressCard, { backgroundColor: c.card, borderColor: c.border }]}>
-          <View style={styles.progressHeader}>
-            <View style={{ flex: 1, marginRight: Spacing.sm }}>
-              <View style={styles.progressLabelRow}>
-                <View style={[styles.pulseDot, { backgroundColor: c.success }]} />
-                <Text style={[styles.progressLabel, { color: c.success }]}>RESEARCH IN PROGRESS</Text>
-              </View>
-              <Text style={[styles.progressCompany, { color: c.text }]}>{filters.company}</Text>
-              <Text style={[styles.progressRole, { color: c.textSecondary }]}>{filters.role}</Text>
-              <Text style={[styles.progressLocation, { color: c.primary }]}>
-                {filters.country}{filters.state ? `, ${filters.state}` : ''}{filters.district ? `, ${filters.district}` : ''}
-              </Text>
-              <Text style={[styles.progressTime, { color: c.textMuted }]}>{getEstimatedTimeText()}</Text>
-            </View>
+    <View style={[styles.root, { backgroundColor: c.bg }]}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: c.text }]}>History</Text>
+          <View style={styles.headerRight}>
+            {sortedSearches.length > 0 && (
+              <TouchableOpacity onPress={handleClearAll} style={styles.headerBtn} activeOpacity={0.7}>
+                <Ionicons name="trash-outline" size={20} color={c.danger} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              style={[styles.stopBtn, { backgroundColor: c.dangerLight, borderColor: c.danger + '30' }]}
-              onPress={handleStopResearch}
+              onPress={() => router.push('/settings')}
+              style={[styles.headerBtn, { backgroundColor: c.surface, borderColor: c.border }]}
               activeOpacity={0.7}
             >
-              <Text style={[styles.stopBtnText, { color: c.danger }]}>■</Text>
-              <Text style={[styles.stopLabel, { color: c.danger }]}>Stop</Text>
+              <Ionicons name="settings-outline" size={20} color={c.text} />
             </TouchableOpacity>
           </View>
-          <ProgressBar progress={progressPercent} />
         </View>
-      )}
 
-      {sortedSearches.length > 0 && (
-        <TouchableOpacity style={styles.clearAllBtn} onPress={handleClearAll} activeOpacity={0.7}>
-          <Text style={[styles.clearAllText, { color: c.danger }]}>
-            Clear All ({sortedSearches.length})
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      <FlatList
-        data={sortedSearches}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <HistoryCard record={item} onView={handleViewResults} onDelete={handleDeleteItem} />
-        )}
-        ListEmptyComponent={
-          !isResearching ? (
-            <View style={styles.emptyWrap}>
-              <Text style={styles.emptyIcon}>📋</Text>
-              <Text style={[styles.emptyTitle, { color: c.text }]}>No Searches Yet</Text>
-              <Text style={[styles.emptyDesc, { color: c.textSecondary }]}>
-                Your past company salary and review researches will appear here.
-              </Text>
+        {isResearching && filters && (
+          <View style={[styles.progressCard, { backgroundColor: c.surface, borderColor: c.primary + '30' }]}>
+            <View style={styles.progressHeader}>
+              <View style={styles.progressInfo}>
+                <View style={styles.progressLabelRow}>
+                  <View style={[styles.pulseDot, { backgroundColor: c.success }]} />
+                  <Text style={[styles.progressLabel, { color: c.success }]}>IN PROGRESS</Text>
+                </View>
+                <View style={styles.progressMeta}>
+                  <View style={styles.progressMetaLeft}>
+                    <Text style={[styles.progressCompany, { color: c.text }]}>{filters.company}</Text>
+                    <Text style={[styles.progressRole, { color: c.textSecondary }]}>{filters.role}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.stopBtn, { backgroundColor: c.dangerLight }]}
+                    onPress={handleStopResearch}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="stop" size={18} color={c.danger} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.progressLocation, { color: c.primary }]}>
+                  {filters.country}{filters.state ? `, ${filters.state}` : ''}{filters.district ? `, ${filters.district}` : ''}
+                </Text>
+              </View>
             </View>
-          ) : null
-        }
-      />
-    </SafeAreaView>
+            <ProgressBar progress={progressPercent} height={5} />
+            <Text style={[styles.progressTime, { color: c.textMuted }]}>{getEstimatedTimeText()}</Text>
+          </View>
+        )}
+
+        <FlatList
+          data={sortedSearches}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <HistoryCard record={item} onView={handleViewResults} onDelete={handleDeleteItem} />
+          )}
+          ListEmptyComponent={
+            !isResearching ? (
+              <View style={styles.emptyWrap}>
+                <View style={[styles.emptyIconWrap, { backgroundColor: c.primaryLight }]}>
+                  <Ionicons name="time-outline" size={40} color={c.primary} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: c.text }]}>No Searches Yet</Text>
+                <Text style={[styles.emptyDesc, { color: c.textSecondary }]}>
+                  Your past company salary and review researches will appear here.
+                </Text>
+              </View>
+            ) : null
+          }
+        />
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   safeArea: { flex: 1 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
+    paddingHorizontal: Spacing.xxl,
+    paddingVertical: Spacing.lg,
+    paddingTop: Spacing.xl,
   },
-  title: { fontSize: 22, fontWeight: '800' },
-  settingsBtn: {
-    width: 40, height: 40,
-    borderRadius: Radius.lg,
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.3 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  progressCard: {
+    marginHorizontal: Spacing.xxl,
+    marginBottom: Spacing.lg,
+    borderRadius: Radius.xxl,
+    padding: Spacing.lg,
+    borderWidth: 1,
+  },
+  progressHeader: {},
+  progressInfo: {},
+  progressLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  pulseDot: { width: 8, height: 8, borderRadius: Radius.full },
+  progressLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
+  progressMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.xs,
+  },
+  progressMetaLeft: { flex: 1, marginRight: Spacing.sm },
+  progressCompany: { fontSize: 17, fontWeight: '700', marginBottom: 2 },
+  progressRole: { fontSize: 13, fontWeight: '500' },
+  progressLocation: { fontSize: 12, fontWeight: '600', marginBottom: Spacing.sm },
+  progressTime: { fontSize: 11, marginTop: Spacing.sm },
+  stopBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  settingsIcon: { fontSize: 20 },
-  progressCard: {
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.md,
-    borderRadius: Radius.xl,
-    padding: Spacing.md,
-    borderWidth: 1,
+  listContent: {
+    paddingHorizontal: Spacing.xxl,
+    paddingBottom: Spacing.massive,
+    paddingTop: Spacing.xs,
   },
-  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  progressLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: Spacing.xs },
-  pulseDot: { width: 8, height: 8, borderRadius: Radius.full },
-  progressLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
-  progressCompany: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
-  progressRole: { fontSize: 13, marginBottom: 2 },
-  progressLocation: { fontSize: 12, fontWeight: '600', marginBottom: Spacing.xs },
-  progressTime: { fontSize: 11 },
-  stopBtn: {
-    alignItems: 'center', justifyContent: 'center',
-    borderRadius: Radius.lg, borderWidth: 1, width: 52, height: 52,
+  emptyWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 80,
+    paddingHorizontal: Spacing.huge,
   },
-  stopBtnText: { fontSize: 18, fontWeight: '700' },
-  stopLabel: { fontSize: 10, fontWeight: '700', marginTop: 2 },
-  clearAllBtn: { alignSelf: 'flex-end', marginHorizontal: Spacing.lg, marginTop: Spacing.sm },
-  clearAllText: { fontSize: 12, fontWeight: '600' },
-  listContent: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
-  emptyWrap: { alignItems: 'center', justifyContent: 'center', marginTop: 80, paddingHorizontal: Spacing.xxxl },
-  emptyIcon: { fontSize: 56, marginBottom: Spacing.lg },
-  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: Spacing.sm },
+  emptyIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: Radius.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xxl,
+  },
+  emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: Spacing.sm },
   emptyDesc: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });

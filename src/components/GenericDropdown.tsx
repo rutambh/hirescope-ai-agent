@@ -10,6 +10,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
 import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
 
@@ -45,45 +46,45 @@ export function GenericDropdown({
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: c.textSecondary }]}>{label}</Text>
+      <View style={styles.labelRow}>
+        <Ionicons name={icon as any} size={14} color={c.textMuted} />
+        <Text style={[styles.label, { color: c.textSecondary }]}>{label}</Text>
+      </View>
 
       <TouchableOpacity
-        style={[
-          styles.dropdownButton,
-          { backgroundColor: c.surfaceAlt, borderColor: c.border },
-          disabled && { opacity: 0.5 },
-        ]}
+        style={[styles.dropdownButton, { backgroundColor: c.surfaceAlt, borderColor: c.border }, disabled && { opacity: 0.5 }]}
         onPress={() => { if (!disabled) { setSearchQuery(''); setModalVisible(true); } }}
         disabled={disabled}
         activeOpacity={0.7}
       >
-        <View style={styles.dropdownLeft}>
-          {icon ? <Text style={styles.iconText}>{icon}</Text> : null}
-          <Text style={selectedValue ? [styles.selectedText, { color: c.text }] : styles.placeholderText}>
-            {selectedValue || placeholder}
-          </Text>
-        </View>
-        <Text style={[styles.arrow, { color: c.textMuted }]}>▼</Text>
+        <Text style={selectedValue ? [styles.selectedText, { color: c.text }] : [styles.placeholderText, { color: c.textMuted }]}>
+          {selectedValue || placeholder}
+        </Text>
+        <Ionicons name="chevron-down" size={16} color={c.textMuted} />
       </TouchableOpacity>
 
       <Modal visible={modalVisible} animationType="slide" transparent={false}>
         <SafeAreaView style={[styles.modalContainer, { backgroundColor: c.bg }]}>
           <View style={[styles.modalHeader, { borderBottomColor: c.border }]}>
-            <Text style={[styles.modalTitle, { color: c.text }]}>Select {label}</Text>
             <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
-              <Text style={[styles.closeBtnText, { color: c.primary }]}>Cancel</Text>
+              <Ionicons name="close" size={24} color={c.text} />
             </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: c.text }]}>Select {label}</Text>
+            <View style={{ width: 44 }} />
           </View>
 
           <View style={styles.searchWrap}>
-            <TextInput
-              style={[styles.searchInput, { backgroundColor: c.surfaceAlt, borderColor: c.border, color: c.text }]}
-              placeholder={`Search ${label.toLowerCase()}...`}
-              placeholderTextColor={c.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoFocus
-            />
+            <View style={[styles.searchInputShell, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
+              <Ionicons name="search" size={18} color={c.textMuted} />
+              <TextInput
+                style={[styles.searchInput, { color: c.text }]}
+                placeholder={`Search ${label.toLowerCase()}...`}
+                placeholderTextColor={c.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus
+              />
+            </View>
           </View>
 
           <FlatList
@@ -101,6 +102,7 @@ export function GenericDropdown({
             )}
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
+                <Ionicons name="search-outline" size={40} color={c.textMuted} />
                 <Text style={[styles.emptyText, { color: c.textMuted }]}>No matches found</Text>
               </View>
             }
@@ -112,29 +114,20 @@ export function GenericDropdown({
 }
 
 const styles = StyleSheet.create({
-  container: { marginBottom: Spacing.md },
-  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginBottom: Spacing.xs, textTransform: 'uppercase' as const },
+  container: { marginBottom: Spacing.lg },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: Spacing.sm },
+  label: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
   dropdownButton: {
     borderRadius: Radius.lg,
-    borderWidth: 1.5,
+    borderWidth: 1,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   selectedText: { fontSize: 15, fontWeight: '500' },
-  placeholderText: { fontSize: 15, color: '#94A3B8' },
-  arrow: { fontSize: 10 },
-  dropdownLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  iconText: {
-    marginRight: Spacing.sm,
-    fontSize: 16,
-  },
+  placeholderText: { fontSize: 15 },
   modalContainer: { flex: 1 },
   modalHeader: {
     flexDirection: 'row',
@@ -144,24 +137,28 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700' },
-  closeBtn: { padding: Spacing.xs },
-  closeBtnText: { fontSize: 15, fontWeight: '600' },
-  searchWrap: { padding: Spacing.md },
-  searchInput: {
+  modalTitle: { fontSize: 17, fontWeight: '700' },
+  closeBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  searchWrap: { padding: Spacing.lg },
+  searchInputShell: {
     borderRadius: Radius.lg,
-    borderWidth: 1.5,
+    borderWidth: 1,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    fontSize: 15,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
   },
+  searchInput: { flex: 1, fontSize: 15 },
   listContent: { paddingBottom: Spacing.xl },
   optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.xxl,
     borderBottomWidth: 0.5,
   },
   optionText: { fontSize: 15, fontWeight: '500' },
-  emptyWrap: { alignItems: 'center', marginTop: Spacing.xxxl },
+  emptyWrap: { alignItems: 'center', marginTop: 80, gap: Spacing.md },
   emptyText: { fontSize: 14 },
 });

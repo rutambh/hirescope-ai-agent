@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet, useColorScheme } from 'react-native';
+import { View, Text, TextInput, StyleSheet, useColorScheme, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { CountryConfig } from '../constants/countries';
 import { useAppStore } from '../store/appStore';
 import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
@@ -24,9 +25,11 @@ export function SalaryInput({ label, value, country, icon, onChange }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: c.textSecondary }]}>{label}</Text>
+      <View style={styles.labelRow}>
+        <Ionicons name={icon as any} size={14} color={c.textMuted} />
+        <Text style={[styles.label, { color: c.textSecondary }]}>{label}</Text>
+      </View>
       <View style={[styles.inputRow, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
-        {icon ? <Text style={styles.icon}>{icon}</Text> : null}
         {symbol ? <Text style={[styles.symbol, { color: c.textMuted }]}>{symbol}</Text> : null}
         <TextInput
           style={[styles.input, { color: c.text }]}
@@ -47,18 +50,18 @@ export function SalaryInput({ label, value, country, icon, onChange }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { marginBottom: Spacing.md },
-  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginBottom: Spacing.xs, textTransform: 'uppercase' as const },
+  container: { marginBottom: Spacing.lg },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: Spacing.sm },
+  label: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
   inputRow: {
     borderRadius: Radius.lg,
-    borderWidth: 1.5,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
   },
   symbol: { fontSize: 16, fontWeight: '600', marginRight: 4 },
-  icon: { marginRight: Spacing.sm, fontSize: 16 },
-  input: { flex: 1, paddingVertical: Spacing.md, fontSize: 16 },
+  input: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 12, fontSize: 16 },
   suffixBadge: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 3,

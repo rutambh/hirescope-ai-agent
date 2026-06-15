@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, useColorScheme } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SearchRecord } from '../types';
 import { getCountryByName } from '../constants/countries';
 import { formatSalary } from '../utils/currency';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
+import { LightColors, DarkColors, Spacing, Radius, Shadows } from '../constants/theme';
 
 type Props = {
   record: SearchRecord;
@@ -63,28 +64,30 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
   };
 
   return (
-    <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
-      {/* Left accent bar */}
-      <View style={[styles.accentBar, { backgroundColor: c.primary }]} />
-
-      <View style={styles.body}>
-        {/* Header row */}
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>{filters.company}</Text>
+    <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+      <View style={styles.cardBody}>
+        <View style={styles.topRow}>
+          <View style={styles.titleArea}>
+            <View style={styles.companyRow}>
+              <View style={[styles.companyDot, { backgroundColor: c.primary }]} />
+              <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>{filters.company}</Text>
+            </View>
             <Text style={[styles.role, { color: c.textSecondary }]} numberOfLines={1}>{filters.role}</Text>
           </View>
+          <TouchableOpacity onPress={() => onDelete(record.id)} style={styles.deleteBtn} activeOpacity={0.6}>
+            <Ionicons name="trash-outline" size={18} color={c.danger} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.metaRow}>
-          <Text style={[styles.locationText, { color: c.primary }]} numberOfLines={1}>
-            📍 {formatLocation()}
-          </Text>
-          <Text style={[styles.timestamp, { color: c.textMuted }]}>• Searched {formatDate(timestamp)}</Text>
+          <Ionicons name="location-outline" size={12} color={c.primary} />
+          <Text style={[styles.locationText, { color: c.primary }]} numberOfLines={1}>{formatLocation()}</Text>
+          <Text style={[styles.dot, { color: c.textMuted }]}>·</Text>
+          <Ionicons name="time-outline" size={12} color={c.textMuted} />
+          <Text style={[styles.timestamp, { color: c.textMuted }]}>{formatDate(timestamp)}</Text>
         </View>
 
-        {/* Stats row */}
-        <View style={[styles.statsRow, { backgroundColor: c.surfaceAlt }]}>
+        <View style={[styles.statsRow, { backgroundColor: isDark ? c.surfaceAlt : '#F8F9FA' }]}>
           <View style={styles.stat}>
             <Text style={[styles.statLabel, { color: c.textMuted }]}>Rating</Text>
             <Text style={[styles.statValue, { color: getRatingColor(results.rating) }]}>
@@ -94,9 +97,7 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
           <View style={[styles.statDivider, { backgroundColor: c.border }]} />
           <View style={styles.stat}>
             <Text style={[styles.statLabel, { color: c.textMuted }]}>Salary</Text>
-            <Text style={[styles.statValue, { color: c.text }]} numberOfLines={1}>
-              {formattedMax}
-            </Text>
+            <Text style={[styles.statValue, { color: c.text }]} numberOfLines={1}>{formattedMax}</Text>
           </View>
           <View style={[styles.statDivider, { backgroundColor: c.border }]} />
           <View style={styles.stat}>
@@ -107,23 +108,14 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
           </View>
         </View>
 
-        {/* Actions */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.viewBtn, { backgroundColor: c.primary }]}
-            onPress={() => onView(record)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.viewBtnText}>View Results</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.deleteBtn, { backgroundColor: c.dangerLight, borderColor: c.danger + '30' }]}
-            onPress={() => onDelete(record.id)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.deleteBtnText, { color: c.danger }]}>🗑️</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={[styles.viewBtn, { backgroundColor: c.primary }]}
+          onPress={() => onView(record)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.viewBtnText}>View Results</Text>
+          <Ionicons name="arrow-forward" size={16} color="#FFF" />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -131,54 +123,44 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius.xxl,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    overflow: 'hidden' as const,
-    flexDirection: 'row' as const,
+    overflow: 'hidden',
   },
-  accentBar: { width: 4 },
-  body: { flex: 1, padding: Spacing.md },
-  header: {
-    marginBottom: Spacing.xs,
+  cardBody: { padding: Spacing.lg },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  title: { fontSize: 16, fontWeight: '700' },
-  role: { fontSize: 13, marginTop: 2 },
-  metaRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    marginBottom: Spacing.sm,
-  },
-  locationText: { fontSize: 12, fontWeight: '600', marginRight: Spacing.sm, flexShrink: 1 },
+  titleArea: { flex: 1, marginRight: Spacing.sm },
+  companyRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: 2 },
+  companyDot: { width: 8, height: 8, borderRadius: Radius.full },
+  title: { fontSize: 17, fontWeight: '700' },
+  role: { fontSize: 13, fontWeight: '500', marginLeft: Spacing.lg + 4 },
+  deleteBtn: { width: 36, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm, marginBottom: Spacing.md, gap: 4, marginLeft: Spacing.lg + 4 },
+  locationText: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
+  dot: { fontSize: 12, marginHorizontal: 2 },
   timestamp: { fontSize: 11 },
   statsRow: {
-    flexDirection: 'row' as const,
+    flexDirection: 'row',
     borderRadius: Radius.md,
     padding: Spacing.sm,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
-  stat: { flex: 1, alignItems: 'center' as const },
+  stat: { flex: 1, alignItems: 'center' },
   statDivider: { width: 1, marginHorizontal: Spacing.xs },
-  statLabel: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 2 },
+  statLabel: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
   statValue: { fontSize: 12, fontWeight: '700' },
-  actions: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+  viewBtn: {
+    flexDirection: 'row',
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.sm + 2,
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: Spacing.sm,
   },
-  viewBtn: {
-    flex: 1,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.sm,
-    alignItems: 'center' as const,
-  },
   viewBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  deleteBtn: {
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    alignItems: 'center' as const,
-  },
-  deleteBtnText: { fontSize: 14 },
 });

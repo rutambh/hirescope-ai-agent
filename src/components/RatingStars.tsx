@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, useColorScheme } from 'react-native';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors } from '../constants/theme';
+import { LightColors, DarkColors, Spacing } from '../constants/theme';
 
 type Props = { rating: number | null; size?: number; };
 
@@ -25,9 +25,9 @@ export function RatingStars({ rating, size = 24 }: Props) {
     if (i <= roundedRating) {
       stars.push(<Text key={i} style={[styles.star, { fontSize: size, color: c.star }]}>★</Text>);
     } else if (i - 0.5 === roundedRating) {
-      stars.push(<Text key={i} style={[styles.star, { fontSize: size, color: c.star, opacity: 0.5 }]}>★</Text>);
+      stars.push(<Text key={i} style={[styles.starHalf, { fontSize: size, color: c.star }]}>★</Text>);
     } else {
-      stars.push(<Text key={i} style={[styles.star, { fontSize: size, color: c.textMuted }]}>☆</Text>);
+      stars.push(<Text key={i} style={[styles.starEmpty, { fontSize: size, color: c.textMuted }]}>★</Text>);
     }
   }
 
@@ -48,9 +48,11 @@ export function RatingStars({ rating, size = 24 }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { alignItems: 'center', justifyContent: 'center', marginVertical: 8 },
-  starsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  container: { alignItems: 'center', justifyContent: 'center', marginVertical: Spacing.sm },
+  starsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xs },
   star: { marginHorizontal: 2 },
+  starHalf: { marginHorizontal: 2, opacity: 0.5 },
+  starEmpty: { marginHorizontal: 2, opacity: 0.3 },
   ratingValue: { fontWeight: '700' },
   noRatingText: {},
 });

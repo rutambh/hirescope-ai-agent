@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, useColorScheme } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
 import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
 
@@ -13,11 +14,16 @@ export function ProsConsCard({ positives, negatives }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.card, { backgroundColor: c.card, borderLeftColor: c.success, borderColor: c.border }]}>
-        <Text style={[styles.cardTitle, { color: c.success }]}>✅ PROS</Text>
+      <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+        <View style={styles.cardHeaderRow}>
+          <View style={[styles.headerIconPro, { backgroundColor: c.successLight }]}>
+            <Ionicons name="thumbs-up" size={16} color={c.success} />
+          </View>
+          <Text style={[styles.cardTitle, { color: c.success }]}>PROS</Text>
+        </View>
         {positives.length > 0 ? positives.map((item, idx) => (
           <View key={`pro-${idx}`} style={styles.listItem}>
-            <Text style={[styles.bullet, { color: c.success }]}>•</Text>
+            <View style={[styles.bullet, { backgroundColor: c.success }]} />
             <Text style={[styles.itemText, { color: c.text }]}>{item}</Text>
           </View>
         )) : (
@@ -25,11 +31,16 @@ export function ProsConsCard({ positives, negatives }: Props) {
         )}
       </View>
 
-      <View style={[styles.card, { backgroundColor: c.card, borderLeftColor: c.danger, borderColor: c.border }]}>
-        <Text style={[styles.cardTitle, { color: c.danger }]}>❌ CONS</Text>
+      <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+        <View style={styles.cardHeaderRow}>
+          <View style={[styles.headerIconCon, { backgroundColor: c.dangerLight }]}>
+            <Ionicons name="thumbs-down" size={16} color={c.danger} />
+          </View>
+          <Text style={[styles.cardTitle, { color: c.danger }]}>CONS</Text>
+        </View>
         {negatives.length > 0 ? negatives.map((item, idx) => (
           <View key={`con-${idx}`} style={styles.listItem}>
-            <Text style={[styles.bullet, { color: c.danger }]}>•</Text>
+            <View style={[styles.bullet, { backgroundColor: c.danger }]} />
             <Text style={[styles.itemText, { color: c.text }]}>{item}</Text>
           </View>
         )) : (
@@ -41,17 +52,36 @@ export function ProsConsCard({ positives, negatives }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { marginVertical: Spacing.sm },
+  container: { marginBottom: Spacing.lg },
   card: {
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
     marginVertical: Spacing.xs,
     borderWidth: 1,
-    borderLeftWidth: 4,
   },
-  cardTitle: { fontSize: 13, fontWeight: '700', letterSpacing: 1, marginBottom: Spacing.sm },
-  listItem: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 5, paddingRight: Spacing.sm },
-  bullet: { fontSize: 16, marginRight: Spacing.sm, lineHeight: 20 },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  headerIconPro: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerIconCon: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTitle: { fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
+  listItem: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 5, paddingRight: Spacing.sm, gap: Spacing.sm },
+  bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 8 },
   itemText: { fontSize: 14, lineHeight: 20, flex: 1 },
-  noData: { paddingVertical: Spacing.xs },
+  noData: { paddingVertical: Spacing.xs, fontSize: 13 },
 });

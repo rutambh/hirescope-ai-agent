@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   GestureResponderEvent,
   useColorScheme,
+  Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
 import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
 
@@ -28,7 +30,6 @@ export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChan
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
   const c = isDark ? DarkColors : LightColors;
 
-  // Use refs to avoid stale closures in the gesture responder
   const trackWidthRef = useRef(0);
   const trackLeftRef = useRef(0);
 
@@ -60,7 +61,6 @@ export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChan
       onMoveShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: (e: GestureResponderEvent) => {
-        // Measure coordinates on grant to handle any offsets correctly
         containerRef.current?.measure((_x, _y, width, _h, absoluteX, _aY) => {
           if (width > 0) {
             trackWidthRef.current = width;
@@ -82,7 +82,7 @@ export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChan
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.labelRow}>
-          {icon ? <Text style={styles.sliderIcon}>{icon}</Text> : null}
+          <Ionicons name={icon as any} size={14} color={c.textMuted} />
           <Text style={[styles.label, { color: c.textSecondary }]}>{label}</Text>
         </View>
         <View style={[styles.valueBadge, { backgroundColor: c.primaryLight }]}>
@@ -98,16 +98,11 @@ export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChan
           onPress={() => onChange(Math.max(min, value - 1))}
           activeOpacity={0.7}
         >
-          <Text style={[styles.stepBtnText, { color: c.text }]}>−</Text>
+          <Ionicons name="remove" size={20} color={c.text} />
         </TouchableOpacity>
 
         <View style={styles.sliderWrapper}>
-          <View
-            ref={containerRef}
-            style={styles.sliderTrackContainer}
-            onLayout={handleLayout}
-            {...panResponder.panHandlers}
-          >
+          <View ref={containerRef} style={styles.sliderTrackContainer} onLayout={handleLayout} {...panResponder.panHandlers}>
             <View style={[styles.trackBg, { backgroundColor: isDark ? '#1E293B' : '#CBD5E1' }]}>
               <View style={[styles.trackFill, { width: `${fillPercentage}%`, backgroundColor: c.primary }]} />
             </View>
@@ -120,7 +115,7 @@ export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChan
           onPress={() => onChange(Math.min(max, value + 1))}
           activeOpacity={0.7}
         >
-          <Text style={[styles.stepBtnText, { color: c.text }]}>+</Text>
+          <Ionicons name="add" size={20} color={c.text} />
         </TouchableOpacity>
       </View>
     </View>
@@ -135,46 +130,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.sm,
   },
-  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' as const },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sliderIcon: {
-    marginRight: Spacing.sm,
-    fontSize: 16,
-  },
-  valueBadge: {
-    borderRadius: Radius.full,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 4,
-    minWidth: 60,
-    alignItems: 'center',
-  },
+  label: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  valueIcon: { marginRight: Spacing.xs },
+  valueBadge: { borderRadius: Radius.full, paddingHorizontal: Spacing.md, paddingVertical: 4, minWidth: 60, alignItems: 'center' },
   valueText: { fontSize: 14, fontWeight: '700' },
-  sliderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  stepBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBtnText: {
-    fontSize: 20,
-    fontWeight: '700',
-    lineHeight: 22,
-  },
-  sliderWrapper: {
-    flex: 1,
-  },
+  sliderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  stepBtn: { width: 36, height: 36, borderRadius: Radius.full, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  sliderWrapper: { flex: 1 },
   sliderTrackContainer: { height: 28, justifyContent: 'center' },
-  trackBg: { height: 4, borderRadius: Radius.full, overflow: 'hidden' as const },
+  trackBg: { height: 4, borderRadius: Radius.full, overflow: 'hidden' },
   trackFill: { height: '100%', borderRadius: Radius.full },
   thumb: {
     position: 'absolute',

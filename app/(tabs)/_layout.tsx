@@ -3,9 +3,9 @@ import { Tabs } from 'expo-router';
 import { View, useColorScheme, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../../src/store/appStore';
-import { LightColors, DarkColors } from '../../src/constants/theme';
+import { LightColors, DarkColors, Radius, Shadows } from '../../src/constants/theme';
 
-type TabIconProps = { focused: boolean; name: any; };
+type TabIconProps = { focused: boolean; name: any };
 
 function TabBarIcon({ focused, name }: TabIconProps) {
   const { theme } = useAppStore();
@@ -14,15 +14,22 @@ function TabBarIcon({ focused, name }: TabIconProps) {
   const c = isDark ? DarkColors : LightColors;
 
   return (
-    <View style={{
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: focused ? c.primaryLight : 'transparent',
-    }}>
-      <Ionicons name={name} size={22} color={focused ? c.primary : c.textMuted} />
+    <View
+      style={{
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 48,
+        height: 32,
+        borderRadius: Radius.lg,
+        backgroundColor: focused ? c.primaryLight : 'transparent',
+      }}
+    >
+      <Ionicons
+        name={focused ? (name.includes('outline') ? name.replace('-outline', '') : name) : name}
+        size={22}
+        color={focused ? c.primary : c.textMuted}
+        style={{ opacity: focused ? 1 : 0.6 }}
+      />
     </View>
   );
 }
@@ -41,35 +48,41 @@ export default function TabLayout() {
         tabBarActiveTintColor: c.primary,
         tabBarInactiveTintColor: c.textMuted,
         tabBarStyle: {
-          backgroundColor: c.surface,
-          borderTopColor: c.border,
+          backgroundColor: c.tabBar,
+          borderTopColor: c.tabBarBorder,
           borderTopWidth: 1,
-          height: 64,
+          height: Platform.OS === 'ios' ? 82 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+          paddingTop: 8,
+          ...(Platform.OS === 'ios' ? {} : Shadows.sm),
         },
         tabBarItemStyle: {
-          height: 64,
+          height: 32,
           justifyContent: 'center',
           alignItems: 'center',
         },
         tabBarIconStyle: {
-          width: 44,
-          height: 44,
+          width: 48,
+          height: 32,
           justifyContent: 'center',
           alignItems: 'center',
-          marginTop: Platform.OS === 'ios' ? 0 : 4, // adjust Android vertical centering
         },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          tabBarIcon: ({ focused }) => <TabBarIcon focused={focused} name={focused ? "search" : "search-outline"} />,
+          tabBarIcon: ({ focused }) => (
+            <TabBarIcon focused={focused} name={focused ? 'search' : 'search-outline'} />
+          ),
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
-          tabBarIcon: ({ focused }) => <TabBarIcon focused={focused} name={focused ? "briefcase" : "briefcase-outline"} />,
+          tabBarIcon: ({ focused }) => (
+            <TabBarIcon focused={focused} name={focused ? 'time' : 'time-outline'} />
+          ),
         }}
       />
     </Tabs>

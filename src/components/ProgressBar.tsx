@@ -32,12 +32,7 @@ export function ProgressBar({ progress, height = 6, showPercent = true }: Props)
   return (
     <View style={styles.container}>
       <View style={[styles.track, { height, backgroundColor: isDark ? '#1E293B' : '#E2E8F0' }]}>
-        <Animated.View
-          style={[
-            styles.fill,
-            { width: widthInterpolate, backgroundColor: c.primary },
-          ]}
-        />
+        <Animated.View style={[styles.fill, { width: widthInterpolate, backgroundColor: c.primary }]} />
       </View>
       {showPercent && (
         <Text style={[styles.percentText, { color: c.textSecondary }]}>{Math.round(progress)}%</Text>
@@ -47,16 +42,17 @@ export function ProgressBar({ progress, height = 6, showPercent = true }: Props)
 }
 
 const styles = StyleSheet.create({
-  container: { marginTop: Spacing.sm, width: '100%' as const },
+  container: { marginTop: Spacing.sm, width: '100%' },
   track: {
     borderRadius: Radius.full,
-    overflow: 'hidden' as const,
+    overflow: 'hidden',
+    position: 'relative',
   },
   fill: { height: '100%', borderRadius: Radius.full },
   percentText: {
     marginTop: Spacing.xs,
     fontSize: 12,
     fontWeight: '600',
-    textAlign: 'right' as const,
+    textAlign: 'right',
   },
 });
