@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   PanResponder,
+  TouchableOpacity,
   GestureResponderEvent,
   useColorScheme,
 } from 'react-native';
@@ -91,21 +92,36 @@ export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChan
         </View>
       </View>
 
-      <View
-        ref={containerRef}
-        style={styles.sliderTrackContainer}
-        onLayout={handleLayout}
-        {...panResponder.panHandlers}
-      >
-        <View style={[styles.trackBg, { backgroundColor: isDark ? '#1E293B' : '#CBD5E1' }]}>
-          <View style={[styles.trackFill, { width: `${fillPercentage}%`, backgroundColor: c.primary }]} />
-        </View>
-        <View style={[styles.thumb, { left: `${fillPercentage}%`, borderColor: c.primary, backgroundColor: c.surface }]} />
-      </View>
+      <View style={styles.sliderRow}>
+        <TouchableOpacity
+          style={[styles.stepBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+          onPress={() => onChange(Math.max(min, value - 1))}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.stepBtnText, { color: c.text }]}>−</Text>
+        </TouchableOpacity>
 
-      <View style={styles.rangeLabels}>
-        <Text style={[styles.rangeText, { color: c.textMuted }]}>{min} yr</Text>
-        <Text style={[styles.rangeText, { color: c.textMuted }]}>{max} yrs</Text>
+        <View style={styles.sliderWrapper}>
+          <View
+            ref={containerRef}
+            style={styles.sliderTrackContainer}
+            onLayout={handleLayout}
+            {...panResponder.panHandlers}
+          >
+            <View style={[styles.trackBg, { backgroundColor: isDark ? '#1E293B' : '#CBD5E1' }]}>
+              <View style={[styles.trackFill, { width: `${fillPercentage}%`, backgroundColor: c.primary }]} />
+            </View>
+            <View style={[styles.thumb, { left: `${fillPercentage}%`, borderColor: c.primary, backgroundColor: c.surface }]} />
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.stepBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+          onPress={() => onChange(Math.min(max, value + 1))}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.stepBtnText, { color: c.text }]}>+</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -136,6 +152,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   valueText: { fontSize: 14, fontWeight: '700' },
+  sliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  stepBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepBtnText: {
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  sliderWrapper: {
+    flex: 1,
+  },
   sliderTrackContainer: { height: 28, justifyContent: 'center' },
   trackBg: { height: 4, borderRadius: Radius.full, overflow: 'hidden' as const },
   trackFill: { height: '100%', borderRadius: Radius.full },
@@ -152,10 +189,4 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  rangeLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Spacing.xs,
-  },
-  rangeText: { fontSize: 11, fontWeight: '500' },
 });

@@ -7,8 +7,9 @@ export function removeOutliers(values: number[]): number[] {
   const sorted = [...validValues].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)];
 
-  // Remove values that are > 2x median or < 0.5x median
-  return validValues.filter((v) => v <= median * 2 && v >= median * 0.5);
+  // Remove extreme outliers only — wider threshold for salary variance
+  const threshold = validValues.length >= 5 ? 3 : 4;
+  return validValues.filter((v) => v <= median * threshold && v >= median / threshold);
 }
 
 export function calculateMedian(values: number[]): number | null {

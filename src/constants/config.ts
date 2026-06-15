@@ -11,27 +11,37 @@ export const APP_CONFIG = {
   maxUrlsFallback: 25,
   maxUrlsMinimum: 5,
 
-  // Search query templates — {company} and {role} are replaced at runtime
+  // Search query templates — {company}, {role}, and {country} are replaced at runtime
+  // {country} expands to "Country State District" — drives location-aware results
+  //
+  // Three targeted categories: Reviews (pros/cons), Ratings, Salary
+  // Each category has a primary and a variant query for broader coverage.
   searchQueryTemplates: [
-    '{company} {role} salary',
-    '{company} {role} reviews',
-    '{company} {role} glassdoor',
-    '{company} {role} ambitionbox',
-    '{company} {role} compensation',
+    // ── Category 1: Reviews → extracts Pros & Cons ──
+    '{company} {country} {role} Reviews',
+    '{company} {country} {role} employee reviews pros cons',
+    // ── Category 2: Ratings → extracts star ratings ──
+    '{company} {country} {role} Ratings',
+    '{company} {country} {role} employee rating',
+    // ── Category 3: Salary → extracts salary range ──
+    '{company} {country} {role} Salary',
+    '{company} {country} {role} compensation pay',
   ] as string[],
 
   // Search engine endpoints
   searchEngines: {
-    duckduckgo: 'https://html.duckduckgo.com/html/?q=',
+    duckduckgo: 'https://www.duckduckgo.com/?q=',
+    google: 'https://www.google.com/search?q=',
     brave: 'https://search.brave.com/search?q=',
     bing: 'https://www.bing.com/search?q=',
+    yahoo: 'https://search.yahoo.com/search?p=',
   },
 
   // ─── Timeouts ─────────────────────────────────────────────────────────────
-  perDomainTimeoutMs: 25000,        // 25s per page (increased for dynamic content)
-  urlDiscoveryTimeoutMs: 20000,     // 20s per search query (increased for SPA rendering)
-  totalTimeoutMs: 8 * 60000,        // 8 minutes total
-  aiInferenceTimeoutMs: 30000,      // 30s for on-device model
+  perDomainTimeoutMs: 30000,        // 30s per page (generous for dynamic content)
+  urlDiscoveryTimeoutMs: 30000,     // 30s per search query (lets engines fully render)
+  totalTimeoutMs: 15 * 60000,       // 15 minutes total — no rush, precision matters
+  aiInferenceTimeoutMs: 60000,      // 60s for on-device model (larger context)
 
   // ─── AI Model (Optional On-Device Enhancement) ────────────────────────────
   // Update modelDownloadUrl after uploading to your host
@@ -48,5 +58,5 @@ export const APP_CONFIG = {
 
   // ─── WebView ──────────────────────────────────────────────────────────────
   webViewUserAgent:
-    'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36',
 };

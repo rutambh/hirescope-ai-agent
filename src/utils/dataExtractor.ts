@@ -50,12 +50,16 @@ export function extractSalaries(
   const clean = text.replace(/\s+/g, ' ');
 
   if (salaryFormat === 'LPA') {
-    // ₹12.5 LPA  |  Rs 12 LPA  |  INR 8.5 L
+    // ₹12.5 LPA  |  Rs 12 LPA  |  INR 8.5 L  |  ₹12L (no space)
     const lpaSymbol = /(?:Rs\.?|INR|₹|inr)\s*(\d+(?:\.\d+)?)\s*(?:lakh|lpa|l|Lakh|LPA|L)\b/gi;
-    // 8 - 15 LPA  |  8.5 to 14.2 Lakhs
-    const lpaRange = /\b(\d+(?:\.\d+)?)\s*(?:-|to)\s*(\d+(?:\.\d+)?)\s*(?:lakh|lpa|l|Lakh|LPA|L)\b/gi;
-    // 12 LPA  (bare number + LPA)
-    const lpaBare = /\b(\d+(?:\.\d+)?)\s*(?:lakh|lpa|lakhs)\b/gi;
+    // 8-15 LPA  |  8.5 to 14.2 Lakhs  |  12L–18L
+    const lpaRange = /\b(\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)\s*(?:lakh|lpa|l|Lakh|LPA|L)\b/gi;
+    // 12 LPA  (bare number + LPA)  |  12 Lakhs  |  12L (bare)
+    const lpaBare = /\b(\d+(?:\.\d+)?)\s*(?:lakh|lpa|lakhs|lpa|l)\b/gi;
+    // ₹12,00,000  |  12,00,000 (Indian numeric format)
+    const indianNumeric = /(?:Rs\.?|INR|₹|inr)?\s*(\d{1,2}),(\d{2}),(\d{3})\b/gi;
+    // ₹1200000  |  1200000 (plain 6-7 digit number)
+    const plainLakh = /\b(\d{6,7})\b/g;
 
     let m: RegExpExecArray | null;
 
@@ -78,11 +82,29 @@ export function extractSalaries(
       const v = parseFloat(m[1]);
       if (!isNaN(v) && v > 0 && v < 300) values.push(v);
     }
+
+    const r4 = new RegExp(indianNumeric.source, indianNumeric.flags);
+    while ((m = r4.exec(clean)) !== null) {
+      const lakh = parseFloat(m[1] + m[2] + m[3]) / 100000;
+      if (!isNaN(lakh) && lakh > 0 && lakh < 300) values.push(lakh);
+    }
+
+    const r5 = new RegExp(plainLakh.source, plainLakh.flags);
+    while ((m = r5.exec(clean)) !== null) {
+      const lakh = parseFloat(m[1]) / 100000;
+      if (!isNaN(lakh) && lakh > 0 && lakh < 300) values.push(lakh);
+    }
   } else if (salaryFormat === 'per year') {
-    // $80,000  |  £65,000  |  €75,000
+    // $80,000  |  £65,000  |  €75,000  |  $80,000 - $150,000
     const yearly = /(?:\$|£|€|CAD|C\$|A\$|USD|GBP|EUR)\s*(\d{2,3})[,\s](\d{3})\b/gi;
-    // $80k  |  £65k
+    // $80k  |  £65k  |  $120K (capital K)
     const kformat = /(?:\$|£|€|CAD|C\$|A\$|USD|GBP|EUR)\s*(\d{2,3})\s*k\b/gi;
+    // 80k USD  |  120K GBP (currency after)
+    const kformatReverse = /\b(\d{2,3})\s*k\s*(?:\$|£|€|CAD|C\$|A\$|USD|GBP|EUR)\b/gi;
+    // $150,000+  (with trailing +)
+    const yearlyPlus = /(?:\$|£|€|CAD|C\$|A\$|USD|GBP|EUR)\s*(\d{2,3})[,\s](\d{3})\s*\+/gi;
+    // 100,000 - 150,000 USD
+    const bareYearly = /\b(\d{2,3})[,\s](\d{3})\s*(?:-|–|—|to)\s*(\d{2,3})[,\s](\d{3})\s*(?:\$|£|€|USD|GBP|EUR|CAD|dollars?|euros?|pounds?)/gi;
 
     let m: RegExpExecArray | null;
 
@@ -97,12 +119,50 @@ export function extractSalaries(
       const v = parseFloat(m[1]) * 1000;
       if (!isNaN(v) && v >= 10000 && v <= 1000000) values.push(v);
     }
+
+    const r3 = new RegExp(kformatReverse.source, kformatReverse.flags);
+    while ((m = r3.exec(clean)) !== null) {
+      const v = parseFloat(m[1]) * 1000;
+      if (!isNaN(v) && v >= 10000 && v <= 1000000) values.push(v);
+    }
+
+    const r4 = new RegExp(yearlyPlus.source, yearlyPlus.flags);
+    while ((m = r4.exec(clean)) !== null) {
+      const v = parseFloat(m[1] + m[2]);
+      if (!isNaN(v) && v >= 10000 && v <= 1000000) values.push(v);
+    }
+
+    const r5 = new RegExp(bareYearly.source, bareYearly.flags);
+    while ((m = r5.exec(clean)) !== null) {
+      const v1 = parseFloat(m[1] + m[2]);
+      const v2 = parseFloat(m[3] + m[4]);
+      if (!isNaN(v1) && v1 >= 10000 && v1 <= 1000000) values.push(v1);
+      if (!isNaN(v2) && v2 >= 10000 && v2 <= 1000000) values.push(v2);
+    }
   } else if (salaryFormat === 'per month') {
     // AED 15,000  |  12,000 Dirhams
-    const monthly = /(?:AED|aed|dirhams?|dh|dhs)\s*(\d{1,2})[,\s](\d{3})\b/gi;
-    const r1 = new RegExp(monthly.source, monthly.flags);
+    const monthly = /(?:AED|aed|dirhams?|dh|dhs|SAR|sar)\s*(\d{1,2})[,\s](\d{3})\b/gi;
+    // AED 12k  |  15k AED (k format for monthly)
+    const monthlyK = /(?:AED|aed|dirhams?|dh|dhs|SAR|sar)\s*(\d{1,2})\s*k\b/gi;
+    // 15,000 AED (currency after)
+    const monthlyReverse = /\b(\d{1,2})[,\s](\d{3})\s*(?:AED|aed|dirhams?|dh|dhs|SAR|sar)\b/gi;
+
     let m: RegExpExecArray | null;
+
+    const r1 = new RegExp(monthly.source, monthly.flags);
     while ((m = r1.exec(clean)) !== null) {
+      const v = parseFloat(m[1] + m[2]);
+      if (!isNaN(v) && v >= 1000 && v <= 200000) values.push(v);
+    }
+
+    const r2 = new RegExp(monthlyK.source, monthlyK.flags);
+    while ((m = r2.exec(clean)) !== null) {
+      const v = parseFloat(m[1]) * 1000;
+      if (!isNaN(v) && v >= 1000 && v <= 200000) values.push(v);
+    }
+
+    const r3 = new RegExp(monthlyReverse.source, monthlyReverse.flags);
+    while ((m = r3.exec(clean)) !== null) {
       const v = parseFloat(m[1] + m[2]);
       if (!isNaN(v) && v >= 1000 && v <= 200000) values.push(v);
     }
@@ -156,7 +216,15 @@ function isGarbageText(line: string, company: string): boolean {
     cleanLine.includes('estimate') ||
     cleanLine.includes('calculator') ||
     cleanLine.includes('advertisement') ||
-    cleanLine.includes('sponsored')
+    cleanLine.includes('sponsored') ||
+    cleanLine.includes('employer') ||
+    cleanLine.includes('post a job') ||
+    cleanLine.includes('find jobs') ||
+    cleanLine.includes('search jobs') ||
+    cleanLine.includes('upload your') ||
+    cleanLine.includes('submit your') ||
+    cleanLine.includes('get started') ||
+    cleanLine.includes('create your')
   ) {
     return true;
   }
@@ -234,7 +302,7 @@ const REVIEW_KEYWORDS = [
   'pressure', 'environment', 'colleagues', 'training', 'benefits',
 ];
 
-function extractSnippets(text: string): string[] {
+function extractSnippets(text: string, company?: string): string[] {
   const snippets: string[] = [];
   const sentences = text.split(/[.!?]\s+/);
 
@@ -243,9 +311,22 @@ function extractSnippets(text: string): string[] {
     if (trimmed.length < 20 || trimmed.length > 200) continue;
     const lower = trimmed.toLowerCase();
     const hasKeyword = REVIEW_KEYWORDS.some(kw => lower.includes(kw));
-    if (hasKeyword) {
-      snippets.push(trimmed);
-    }
+    if (!hasKeyword) continue;
+
+    // Skip garbage text (same filter used for section extraction)
+    if (company && isGarbageText(trimmed, company)) continue;
+
+    // Skip lines that look like navigation or UI chrome
+    if (
+      trimmed.startsWith('Sign') ||
+      trimmed.startsWith('Log') ||
+      trimmed.includes('create your') ||
+      trimmed.includes('get started') ||
+      trimmed.startsWith('Search') ||
+      trimmed.match(/^\d+\.\s*$/)
+    ) continue;
+
+    snippets.push(trimmed);
     if (snippets.length >= 20) break;
   }
 
@@ -292,7 +373,7 @@ export function extractStructuredRecord(
 
   const pros = extractSection(text, PRO_HEADERS, company);
   const cons = extractSection(text, CON_HEADERS, company);
-  const snippets = extractSnippets(text);
+  const snippets = extractSnippets(text, company);
 
   return {
     source,

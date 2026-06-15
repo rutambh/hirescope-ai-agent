@@ -23,12 +23,15 @@ import { SalaryInput } from '../../src/components/SalaryInput';
 import { STATES_BY_COUNTRY, DISTRICTS_BY_STATE } from '../../src/constants/locations';
 import { useAppStore } from '../../src/store/appStore';
 import { useAIModelStore } from '../../src/store/aiModelStore';
+import { useScraper } from '../../src/hooks/useScraper';
 import { LightColors, DarkColors, Spacing, Radius, Shadows } from '../../src/constants/theme';
 
 export default function SearchScreen() {
   const router = useRouter();
   const setStoreFilters = useSearchStore((state) => state.setActiveFilters);
   const startSearch = useSearchStore((state) => state.startSearch);
+  const searchStore = useSearchStore();
+  const scraper = useScraper();
   const { theme } = useAppStore();
   const { status: aiStatus } = useAIModelStore();
   const systemColorScheme = useColorScheme();
@@ -39,10 +42,12 @@ export default function SearchScreen() {
   const [districtName, setDistrictName] = useState('');
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
-  const [experience, setExperience] = useState(5); // default 5 years
+  const [experience, setExperience] = useState(5);
   const [salary, setSalary] = useState('');
 
-  // Determine active theme colors dynamically
+  const phase = searchStore.activePhase;
+  const isResearching = phase === 'searching' || phase === 'extracting';
+
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
   const designTokens = isDark ? DarkColors : LightColors;
   const colors = {
@@ -57,9 +62,9 @@ export default function SearchScreen() {
     primaryLight: designTokens.primaryLight,
     accent: designTokens.accent,
     surfaceAlt: designTokens.surfaceAlt,
+    success: designTokens.success,
   };
 
-  // Validate inputs
   const isFormValid =
     selectedCountry !== null &&
     company.trim().length >= 2 &&
@@ -75,7 +80,6 @@ export default function SearchScreen() {
       return;
     }
 
-    // Set filters in Zustand store
     setStoreFilters({
       country: selectedCountry.name,
       countryCode: selectedCountry.code,
@@ -90,11 +94,15 @@ export default function SearchScreen() {
       district: districtName || undefined,
     });
 
-    // Start background research phase
     startSearch();
-
-    // Navigate immediately to History screen (where active progress is displayed)
     router.replace('/(tabs)/history');
+  };
+
+  const handleStopResearch = () => {
+    Alert.alert('Stop Research', 'Are you sure you want to stop this background research? You will lose all active progress.', [
+      { text: 'Continue', style: 'default' },
+      { text: 'Stop', style: 'destructive', onPress: () => scraper.handleCancel() },
+    ]);
   };
 
   return (
@@ -110,7 +118,7 @@ export default function SearchScreen() {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header Section */}
+          {/* ── Header ── */}
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
               <Text style={[styles.appTitle, { color: colors.text }]}>HireScope</Text>
@@ -119,9 +127,17 @@ export default function SearchScreen() {
                 <Text style={[styles.appSubtitle, { color: colors.subtext }]}>
                   Pre-interview Research Engine
                 </Text>
-                {aiStatus === 'installed' && (
-                  <Text style={styles.aiBadge}> · AI Enhanced ✨</Text>
-                )}
+                <View style={styles.aiStatusRow}>
+                  {aiStatus === 'installed' ? (
+                    <View style={[styles.aiBadge, { backgroundColor: colors.success + '20' }]}>
+                      <Text style={[styles.aiBadgeText, { color: colors.success }]}> AI ✨</Text>
+                    </View>
+                  ) : aiStatus === 'downloading' || aiStatus === 'validating' ? (
+                    <View style={[styles.aiBadge, { backgroundColor: '#F59E0B20' }]}>
+                      <Text style={[styles.aiBadgeText, { color: '#F59E0B' }]}> AI ↓</Text>
+                    </View>
+                  ) : null}
+                </View>
               </View>
             </View>
             <TouchableOpacity
@@ -133,7 +149,7 @@ export default function SearchScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Form Card */}
+          {/* ── Form Card ── */}
           <View
             style={[
               styles.formCard,
@@ -159,7 +175,6 @@ export default function SearchScreen() {
                 <Text style={[styles.sectionLabel, { color: colors.muted }]}>LOCATION</Text>
               </View>
 
-              {/* Country */}
               <FilterDropdown
                 label="Country"
                 icon="🌍"
@@ -173,7 +188,6 @@ export default function SearchScreen() {
                 }}
               />
 
-              {/* State */}
               <GenericDropdown
                 label="State"
                 icon="🗺️"
@@ -192,9 +206,8 @@ export default function SearchScreen() {
                 }}
               />
 
-              {/* District */}
               <GenericDropdown
-                label="District"
+                label="District / City"
                 icon="🏙️"
                 selectedValue={districtName}
                 options={stateName ? ['Clear Selection', ...(DISTRICTS_BY_STATE[stateName] || [])] : []}
@@ -214,25 +227,21 @@ export default function SearchScreen() {
             <View style={styles.sectionBlock}>
               <View style={styles.sectionLabelRow}>
                 <Text style={styles.sectionIcon}>💼</Text>
-                <Text style={[styles.sectionLabel, { color: colors.muted }]}>Company and Job Looking for</Text>
+                <Text style={[styles.sectionLabel, { color: colors.muted }]}>POSITION</Text>
               </View>
 
-              {/* Company */}
               <View style={styles.fieldContainer}>
                 <Text style={[styles.inputLabel, { color: colors.subtext }]}>Company Name</Text>
                 <View
                   style={[
                     styles.inputShell,
-                    {
-                      backgroundColor: colors.surfaceAlt,
-                      borderColor: colors.border,
-                    },
+                    { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
                   ]}
                 >
                   <Text style={styles.inputIcon}>🏢</Text>
                   <TextInput
                     style={[styles.textInput, { color: colors.text }]}
-                    placeholder="e.g. Google, Deloitte, Infosys"
+                    placeholder="Company Name"
                     placeholderTextColor={colors.muted}
                     value={company}
                     onChangeText={setCompany}
@@ -242,22 +251,18 @@ export default function SearchScreen() {
                 </View>
               </View>
 
-              {/* Role */}
               <View style={styles.fieldContainer}>
                 <Text style={[styles.inputLabel, { color: colors.subtext }]}>Job Role</Text>
                 <View
                   style={[
                     styles.inputShell,
-                    {
-                      backgroundColor: colors.surfaceAlt,
-                      borderColor: colors.border,
-                    },
+                    { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
                   ]}
                 >
                   <Text style={styles.inputIcon}>🎯</Text>
                   <TextInput
                     style={[styles.textInput, { color: colors.text }]}
-                    placeholder="e.g. SDE 2, PM, Analyst"
+                    placeholder="Job Role"
                     placeholderTextColor={colors.muted}
                     value={role}
                     onChangeText={setRole}
@@ -275,7 +280,6 @@ export default function SearchScreen() {
                 <Text style={[styles.sectionLabel, { color: colors.muted }]}>COMPENSATION</Text>
               </View>
 
-              {/* Experience */}
               <ExperienceSlider
                 label="Years of Experience"
                 icon="⏱️"
@@ -283,7 +287,6 @@ export default function SearchScreen() {
                 onChange={setExperience}
               />
 
-              {/* Salary */}
               <SalaryInput
                 label="Current Salary"
                 icon="💵"
@@ -297,7 +300,7 @@ export default function SearchScreen() {
             <View style={[styles.helperRow, { backgroundColor: colors.primaryLight }]}>
               <Text style={styles.helperIcon}>💡</Text>
               <Text style={[styles.helperText, { color: colors.primaryDark }]}>
-                Tip: Select a country first to enable location-specific salary formatting.
+                Select a country first to enable location-specific salary formatting.
               </Text>
             </View>
 
@@ -319,7 +322,7 @@ export default function SearchScreen() {
                     : { shadowOpacity: 0, elevation: 0 }),
                 },
               ]}
-              disabled={!isFormValid}
+              disabled={!isFormValid || isResearching}
               onPress={handleStartResearch}
               activeOpacity={0.85}
             >
@@ -329,13 +332,22 @@ export default function SearchScreen() {
               <Text
                 style={[
                   styles.submitButtonText,
-                  { color: isFormValid ? '#FFFFFF' : colors.muted },
+                  { color: (isFormValid && !isResearching) ? '#FFFFFF' : colors.muted },
                 ]}
               >
-                Start Research
+                {isResearching ? 'Research in Progress...' : 'Start Research'}
               </Text>
-              {isFormValid && <Text style={styles.submitArrow}>→</Text>}
+              {isFormValid && !isResearching && <Text style={styles.submitArrow}>→</Text>}
             </TouchableOpacity>
+          </View>
+
+          {/* ── Footer Info ── */}
+          <View style={styles.footerRow}>
+            <Text style={[styles.footerText, { color: colors.muted }]}>
+              {aiStatus === 'installed'
+                ? 'AI enhancement active ✨'
+                : 'No server. No login. Your data stays on device.'}
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -375,6 +387,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: Spacing.xs,
+    flexWrap: 'wrap',
   },
   subtitleAccent: {
     width: 4,
@@ -387,10 +400,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 0.3,
   },
+  aiStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   aiBadge: {
-    fontSize: 13,
-    color: '#F59E0B',
-    fontWeight: '500',
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    marginLeft: Spacing.xs,
+  },
+  aiBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   settingsButton: {
     width: 44,
@@ -428,11 +450,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.2,
-  },
-  formHeaderSubtext: {
-    fontSize: 12,
-    marginLeft: 'auto',
-    fontWeight: '500',
   },
   sectionBlock: {
     marginBottom: Spacing.md,
@@ -525,5 +542,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginLeft: Spacing.sm,
     zIndex: 1,
+  },
+  footerRow: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xl,
+  },
+  footerText: {
+    fontSize: 12,
+    textAlign: 'center',
   },
 });

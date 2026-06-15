@@ -66,13 +66,16 @@ export default function HistoryScreen() {
   );
 
   const getEstimatedTimeText = () => {
-    const totalSecs = 8 * 60;
+    const totalSecs = 15 * 60;
     const elapsedMinutes = (totalSecs - estimatedSecondsRemaining) / 60;
-    if (phase === 'searching') return 'Discovering URLs...';
-    if (elapsedMinutes < 2) return '~6 min remaining';
-    if (elapsedMinutes < 4) return '~4 min remaining';
-    if (elapsedMinutes < 6) return '~2 min remaining';
-    return 'Finalizing...';
+    if (phase === 'searching') return 'Scanning sources across the web...';
+    if (phase === 'extracting') return `Scraping page data... ${Math.round(elapsedMinutes)}/${Math.round(totalSecs / 60)} min`;
+    if (elapsedMinutes < 3) return '~12 min remaining';
+    if (elapsedMinutes < 6) return '~9 min remaining';
+    if (elapsedMinutes < 9) return '~6 min remaining';
+    if (elapsedMinutes < 12) return '~3 min remaining';
+    if (elapsedMinutes < 14) return '~1 min remaining';
+    return 'Finalizing results...';
   };
 
   const isResearching = phase === 'searching' || phase === 'extracting';

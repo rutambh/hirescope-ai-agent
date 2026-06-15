@@ -75,7 +75,7 @@ export const useSearchStore = create<SearchState>((set) => ({
   startSearch: () => set({
     activePhase: 'searching',
     activeProgressPercent: 0,
-    activeEstimatedSecondsRemaining: 8 * 60,
+    activeEstimatedSecondsRemaining: 15 * 60,
     activeUrlsDiscovered: 0,
     activeUrlsProcessed: 0,
     activeRawDataPoints: [],

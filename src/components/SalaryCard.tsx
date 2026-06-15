@@ -17,11 +17,10 @@ export function SalaryCard({ results, filters, country }: Props) {
 
   const hasSalaryData = salaryMin !== null && salaryMax !== null;
 
-  // Logic: Check if user's current salary is above the results of Expected Salary
   const isCurrentSalaryHigh = hasSalaryData && filters.currentSalary > salaryMax;
 
-  // Expected salary range displays lowest to highest starting from current salary (Math.max)
-  const displayMin = hasSalaryData ? Math.max(salaryMin, filters.currentSalary) : 0;
+  // Use actual market salary range from scraped data — never override with current salary
+  const displayMin = hasSalaryData ? salaryMin : 0;
   const displayMax = hasSalaryData ? salaryMax : 0;
 
   const minFormatted = formatSalary(displayMin, country);

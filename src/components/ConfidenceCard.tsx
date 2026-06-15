@@ -48,10 +48,6 @@ export function ConfidenceCard({ results }: Props) {
           <Text style={[styles.statValue, { color: c.text }]}>{domainsScraped}</Text>
         </View>
         <View style={styles.statRow}>
-          <Text style={[styles.statLabel, { color: c.textSecondary }]}>Analysis Method:</Text>
-          <Text style={[styles.statValue, { color: c.text }]}>{aiEnhancedSummary ? 'AI Enhanced ✨' : 'Summary Engine'}</Text>
-        </View>
-        <View style={styles.statRow}>
           <Text style={[styles.statLabel, { color: c.textSecondary }]}>Research Time:</Text>
           <Text style={[styles.statValue, { color: c.text }]}>{formatTime(timeElapsedSeconds)}</Text>
         </View>

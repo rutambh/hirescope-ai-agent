@@ -18,7 +18,7 @@ export const useAppStore = create<AppStore>()(
     (set) => ({
       theme: 'system',
       setTheme: (theme) => set({ theme }),
-      maxDomainsToScrape: 30,
+      maxDomainsToScrape: 50,
       setMaxDomainsToScrape: (maxDomainsToScrape) => set({ maxDomainsToScrape }),
     }),
     {

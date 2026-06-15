@@ -30,9 +30,8 @@ try {
 export function useAIModel() {
   const store = useAIModelStore();
   const downloadResumableRef = useRef<FileSystem.DownloadResumable | null>(null);
-  const speedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastBytesRef = useRef<number>(0);
   const inferenceContextRef = useRef<any>(null);
+  const downloadCancelledRef = useRef<boolean>(false);
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -43,44 +42,46 @@ export function useAIModel() {
     }
   };
 
-  const startSpeedTracking = (getDownloaded: () => number) => {
-    lastBytesRef.current = getDownloaded();
-    speedTimerRef.current = setInterval(() => {
-      const current = getDownloaded();
-      const speed = current - lastBytesRef.current;
-      lastBytesRef.current = current;
-      store.setProgress(current, store.totalBytes, Math.max(0, speed));
-    }, 1000);
-  };
-
-  const stopSpeedTracking = () => {
-    if (speedTimerRef.current) {
-      clearInterval(speedTimerRef.current);
-      speedTimerRef.current = null;
-    }
-  };
+  // Speed is calculated inside the throttled onProgress callback
+  // to avoid race conditions between two separate update sources.
 
   // ─── Download ─────────────────────────────────────────────────────────────
 
   const downloadModel = useCallback(async () => {
     try {
+      downloadCancelledRef.current = false;
       await ensureModelDir();
       store.setStatus('downloading');
-      store.setProgress(0, APP_CONFIG.modelExpectedSizeMb * 1024 * 1024, 0);
+
+      // Initialize total bytes upfront — stable reference prevents flickering
+      const stableTotalBytes = APP_CONFIG.modelExpectedSizeMb * 1024 * 1024;
+      store.setProgress(0, stableTotalBytes, 0);
 
       let currentBytes = 0;
+      let lastUpdateTime = 0;
+      let lastBytesForSpeed = 0;
+      const THROTTLE_MS = 300;
 
       const onProgress = (progress: FileSystem.DownloadProgressData) => {
         currentBytes = progress.totalBytesWritten;
+        const now = Date.now();
+        const elapsed = now - lastUpdateTime;
+        if (elapsed < THROTTLE_MS) return;
+
+        const bytesDelta = currentBytes - lastBytesForSpeed;
+        const speed = elapsed > 0 ? Math.round((bytesDelta / elapsed) * 1000) : 0;
+
+        lastUpdateTime = now;
+        lastBytesForSpeed = currentBytes;
+
         const total = progress.totalBytesExpectedToWrite;
-        store.setProgress(currentBytes, total > 0 ? total : APP_CONFIG.modelExpectedSizeMb * 1024 * 1024, 0);
+        store.setProgress(currentBytes, total > 0 ? total : stableTotalBytes, Math.max(0, speed));
       };
 
       const resumeUri = store.resumeUri;
       let downloadResumable: FileSystem.DownloadResumable;
 
       if (resumeUri) {
-        // Resume from saved snapshot
         downloadResumable = new FileSystem.DownloadResumable(
           APP_CONFIG.modelDownloadUrl,
           MODEL_PATH,
@@ -98,24 +99,26 @@ export function useAIModel() {
       }
 
       downloadResumableRef.current = downloadResumable;
-      startSpeedTracking(() => currentBytes);
 
       const result = await downloadResumable.downloadAsync();
-      stopSpeedTracking();
+
+      // If download was paused/cancelled, don't proceed with validation
+      if (downloadCancelledRef.current) return;
 
       if (!result || !result.uri) {
         throw new Error('Download returned no file URI');
       }
 
-      // Validate
+      // Final progress capture before validation
+      store.setProgress(currentBytes > 0 ? currentBytes : stableTotalBytes, stableTotalBytes, 0);
       store.setStatus('validating');
       await validateModel();
 
       store.setInstalled(APP_CONFIG.modelVersion);
     } catch (err: any) {
-      stopSpeedTracking();
+      // If we intentionally paused/cancelled, ignore the error silently
+      if (downloadCancelledRef.current) return;
       if (err?.message?.includes('cancelled')) {
-        // User cancelled — reset silently
         store.resetDownload();
       } else {
         store.setError(err?.message ?? 'Download failed');
@@ -125,8 +128,8 @@ export function useAIModel() {
 
   const pauseDownload = useCallback(async () => {
     if (!downloadResumableRef.current) return;
+    downloadCancelledRef.current = true;
     try {
-      stopSpeedTracking();
       const snapshot = await downloadResumableRef.current.pauseAsync();
       store.setResumeUri(snapshot?.url ?? null);
       store.setStatus('paused');
@@ -140,6 +143,7 @@ export function useAIModel() {
   }, [downloadModel]);
 
   const cancelDownload = useCallback(async () => {
+    downloadCancelledRef.current = true;
     if (downloadResumableRef.current) {
       try {
         await downloadResumableRef.current.cancelAsync();
@@ -148,7 +152,6 @@ export function useAIModel() {
       }
       downloadResumableRef.current = null;
     }
-    stopSpeedTracking();
     // Delete partial file
     try {
       await FileSystem.deleteAsync(MODEL_PATH, { idempotent: true });
@@ -224,8 +227,8 @@ export function useAIModel() {
       if (!inferenceContextRef.current) {
         inferenceContextRef.current = await llamaModule.initLlama({
           model: MODEL_PATH,
-          n_ctx: 512,
-          n_threads: 2,
+          n_ctx: 1024,         // Larger context for richer summaries
+          n_threads: 4,         // Better utilization on modern devices
         });
       }
 
@@ -235,10 +238,10 @@ export function useAIModel() {
       // Run with timeout
       const inferencePromise = inferenceContextRef.current.completion({
         prompt,
-        n_predict: 150,
-        temperature: 0.3,
-        top_p: 0.9,
-        stop: ['\n\n', 'Data:', 'Company:'],
+        n_predict: 300,        // More tokens for a thorough summary
+        temperature: 0.2,      // Lower temperature for more factual output
+        top_p: 0.85,
+        stop: ['\n\n', 'Data:', 'Company:', 'Location:'],
       });
 
       const timeoutPromise = new Promise<null>((_, reject) =>

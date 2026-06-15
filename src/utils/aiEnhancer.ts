@@ -10,6 +10,10 @@ export type AIEnhancerInput = {
   company: string;
   role: string;
   country: string;
+  state: string;
+  district: string;
+  experience: number;
+  currentSalary: number;
   rating: number | null;
   salaryRange: string;
   hikeRange: string;
@@ -36,6 +40,10 @@ export function buildAIInput(
     company: filters.company,
     role: filters.role,
     country: filters.country,
+    state: filters.state || '',
+    district: filters.district || '',
+    experience: filters.experience,
+    currentSalary: filters.currentSalary,
     rating: results.rating,
     salaryRange,
     hikeRange,
@@ -46,21 +54,31 @@ export function buildAIInput(
 }
 
 export function buildAIPrompt(input: AIEnhancerInput): string {
-  return `You are a professional career summary writer.
-Write a 2-3 sentence human-readable summary based on the following structured data.
-Be factual. Use only the data provided. Do not add information.
-Do not use bullet points. Plain sentences only.
+  const location = [input.country, input.state, input.district].filter(Boolean).join(', ');
+
+  return `You are a professional career and salary research analyst.
+Write a detailed analysis of the research findings below in 5-7 sentences.
+
+Structure your response in three paragraphs:
+1. Salary Assessment: Compare the market range to the user's current salary and comment on the hike potential.
+2. Company Rating & Reputation: What the rating suggests about employee satisfaction.
+3. Key Pros and Cons: Highlight the most important positives and negatives.
+
+Be factual. Use only the data provided. Do not add or infer information.
+Do not use bullet points or markdown. Plain paragraphs only.
 
 Data:
 Company: ${input.company}
 Role: ${input.role}
-Country: ${input.country}
+Location: ${location}
+Experience: ${input.experience} years
+Current Salary: ${input.currentSalary}
 Rating: ${input.rating !== null ? `${input.rating}/5` : 'Not available'}
 Salary Range: ${input.salaryRange}
 Expected Hike: ${input.hikeRange}
-Confidence: ${input.confidence}
+Confidence Level: ${input.confidence}
 Top Positives: ${input.topPros.join(', ')}
 Top Negatives: ${input.topCons.join(', ')}
 
-Summary:`;
+Analysis:`;
 }

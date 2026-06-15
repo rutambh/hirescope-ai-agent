@@ -5,9 +5,11 @@ import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
 
 type Props = {
   progress: number;
+  height?: number;
+  showPercent?: boolean;
 };
 
-export function ProgressBar({ progress }: Props) {
+export function ProgressBar({ progress, height = 6, showPercent = true }: Props) {
   const { theme } = useAppStore();
   const systemColorScheme = useColorScheme();
   const animatedValue = useRef(new Animated.Value(0)).current;
@@ -29,7 +31,7 @@ export function ProgressBar({ progress }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.track, { backgroundColor: isDark ? '#1E293B' : '#E2E8F0' }]}>
+      <View style={[styles.track, { height, backgroundColor: isDark ? '#1E293B' : '#E2E8F0' }]}>
         <Animated.View
           style={[
             styles.fill,
@@ -37,7 +39,9 @@ export function ProgressBar({ progress }: Props) {
           ]}
         />
       </View>
-      <Text style={[styles.percentText, { color: c.textSecondary }]}>{Math.round(progress)}%</Text>
+      {showPercent && (
+        <Text style={[styles.percentText, { color: c.textSecondary }]}>{Math.round(progress)}%</Text>
+      )}
     </View>
   );
 }
@@ -45,7 +49,6 @@ export function ProgressBar({ progress }: Props) {
 const styles = StyleSheet.create({
   container: { marginTop: Spacing.sm, width: '100%' as const },
   track: {
-    height: 6,
     borderRadius: Radius.full,
     overflow: 'hidden' as const,
   },

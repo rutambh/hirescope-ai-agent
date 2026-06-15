@@ -14,54 +14,113 @@ import { useRef, useCallback } from 'react';
 import { APP_CONFIG } from '../constants/config';
 import { useAppStore } from '../store/appStore';
 import { useSearchStore } from '../store/searchStore';
+import { logger } from '../utils/logger';
 
 // ─── Injection Scripts ────────────────────────────────────────────────────────
 
-// Extracts search result links from DuckDuckGo / Brave / Bing
+// Extracts search result links from DuckDuckGo / Brave / Bing / Google / generic
 // Uses MutationObserver to wait for results to appear dynamically
 const WEBVIEW_URL_EXTRACTOR_SCRIPT = `
 (function() {
   try {
     function extractUrls() {
       var urls = [];
+      var seen = new Set();
 
-      // DuckDuckGo selectors
-      var ddgLinks = document.querySelectorAll(
-        'a.result__url, a.result__link, .result__title a, .links_main a, .result a[href]'
-      );
-      for (var i = 0; i < ddgLinks.length; i++) {
-        var href = ddgLinks[i].getAttribute('href') || ddgLinks[i].href;
-        if (href && href.startsWith('http') && !href.includes('duckduckgo.com')) urls.push(href);
+      function addUrl(href) {
+        if (!href || !href.startsWith('http')) return;
+        if (seen.has(href)) return;
+        seen.add(href);
+        urls.push(href);
       }
 
-      // Brave Search selectors
-      var braveLinks = document.querySelectorAll(
-        '.result .title a, a.result-title, .result-card a[href], .snippet-url, .result-url'
-      );
-      for (var j = 0; j < braveLinks.length; j++) {
-        var href = braveLinks[j].getAttribute('href') || braveLinks[j].href;
-        if (href && href.startsWith('http') && !href.includes('brave.com') && !href.includes('search.brave.com')) urls.push(href);
+      // ── DuckDuckGo ──
+      var ddgSelectors = [
+        'a.result__url', 'a.result__link', '.result__title a',
+        '.links_main a', '.result a[href]', 'article h2 a',
+        'a[data-testid="result-title-a"]', '.nrn-react-div a',
+        '.result__body a[href]', 'a[data-testid="result"]',
+        '.serp__result a', '.results article a',
+      ];
+      for (var s = 0; s < ddgSelectors.length; s++) {
+        var els = document.querySelectorAll(ddgSelectors[s]);
+        for (var i = 0; i < els.length; i++) {
+          var href = els[i].getAttribute('href') || els[i].href;
+          if (href && !href.includes('duckduckgo.com')) addUrl(href);
+        }
       }
 
-      // Bing selectors
-      var bingLinks = document.querySelectorAll(
-        '#b_results .b_algo h2 a, #b_results .b_caption a'
-      );
-      for (var k = 0; k < bingLinks.length; k++) {
-        var href = bingLinks[k].getAttribute('href') || bingLinks[k].href;
-        if (href && href.startsWith('http') && !href.includes('bing.com') && !href.includes('microsoft.com')) urls.push(href);
+      // ── Brave ──
+      var braveSelectors = [
+        '.result .title a', 'a.result-title', '.result-card a[href]',
+        '.snippet-url', '.result-url', '.snippet-title a',
+        'a[data-testid="result-link"]', '.search-result a',
+        '.snippet-title a', '.snippet-content a',
+        'a[class*="title"]', '.heading-lg a',
+      ];
+      for (s = 0; s < braveSelectors.length; s++) {
+        els = document.querySelectorAll(braveSelectors[s]);
+        for (i = 0; i < els.length; i++) {
+          href = els[i].getAttribute('href') || els[i].href;
+          if (href && !href.includes('brave.com') && !href.includes('search.brave.com')) addUrl(href);
+        }
       }
 
-      // Fallback: all visible anchor tags
+      // ── Bing ──
+      var bingSelectors = [
+        '#b_results .b_algo h2 a', '#b_results .b_caption a',
+        '.b_algo h2 a', '#b_results a[href]', '.b_caption p a',
+        '.b_title a', '.b_algo a[href]', 'ol#b_results h2 a',
+      ];
+      for (s = 0; s < bingSelectors.length; s++) {
+        els = document.querySelectorAll(bingSelectors[s]);
+        for (i = 0; i < els.length; i++) {
+          href = els[i].getAttribute('href') || els[i].href;
+          if (href && !href.includes('bing.com') && !href.includes('microsoft.com')) addUrl(href);
+        }
+      }
+
+      // ── Google ──
+      var googleSelectors = [
+        'a[jsname="UWckNb"]', '.yuRUbf a', 'a[data-ved] h3',
+        '.g .r a', 'h3.r a', 'a[ping]',
+        '.g a[href^="http"] h3', '.g a[data-header-feature]',
+        'a[jsname] h3', 'div[data-snhf] a',
+      ];
+      for (s = 0; s < googleSelectors.length; s++) {
+        els = document.querySelectorAll(googleSelectors[s]);
+        for (i = 0; i < els.length; i++) {
+          href = els[i].getAttribute('href') || els[i].href;
+          if (href && !href.includes('google.com')) addUrl(href);
+        }
+      }
+
+      // ── Yahoo ──
+      var yahooSelectors = [
+        'h3 a', '.title a', '.compTitle a', '.lh-16 a',
+        'a[data-matarget]', '.algo a', '.searchCenterMiddle a',
+        '.dd.algo a', 'h4 a', '.ac-title a',
+      ];
+      for (s = 0; s < yahooSelectors.length; s++) {
+        els = document.querySelectorAll(yahooSelectors[s]);
+        for (i = 0; i < els.length; i++) {
+          href = els[i].getAttribute('href') || els[i].href;
+          if (href && !href.includes('yahoo.com') && !href.includes('search.yahoo.com')) addUrl(href);
+        }
+      }
+
+      // ── Universal fallback: collect all visible anchor tags ──
       if (urls.length === 0) {
         var allAnchors = document.querySelectorAll('a[href]');
-        for (var n = 0; n < allAnchors.length && urls.length < 50; n++) {
-          var href = allAnchors[n].getAttribute('href') || '';
+        for (var n = 0; n < allAnchors.length && urls.length < 100; n++) {
+          href = allAnchors[n].getAttribute('href') || '';
           if (href.startsWith('http') &&
               !href.includes('duckduckgo.com') &&
               !href.includes('bing.com') &&
               !href.includes('brave.com') &&
               !href.includes('google.com') &&
+              !href.includes('yahoo.com') &&
+              !href.includes('search.yahoo.com') &&
               !href.includes('youtube.com') &&
               !href.includes('facebook.com') &&
               !href.includes('twitter.com') &&
@@ -69,7 +128,7 @@ const WEBVIEW_URL_EXTRACTOR_SCRIPT = `
               !href.includes('instagram.com') &&
               !href.includes('pinterest.com') &&
               !href.includes('javascript:')) {
-            urls.push(href);
+            addUrl(href);
           }
         }
       }
@@ -86,7 +145,7 @@ const WEBVIEW_URL_EXTRACTOR_SCRIPT = `
 
     // If nothing yet, use MutationObserver to wait for dynamic content
     var attempts = 0;
-    var maxAttempts = 40; // 4 seconds total (100ms interval)
+    var maxAttempts = 150; // 15 seconds total (100ms interval)
     var observer = null;
 
     function tryExtract() {
@@ -127,52 +186,70 @@ const WEBVIEW_URL_EXTRACTOR_SCRIPT = `
 true;
 `;
 
-// Extracts visible text content from a page
+// Extracts visible text content from a page — optimized for review/salary sites
 const WEBVIEW_CONTENT_EXTRACTOR_SCRIPT = `
 (function() {
   try {
     function extractContent() {
-      // Remove non-content elements
+      // Remove non-content elements aggressively (avoid stripping salary/review content)
       var toRemove = document.querySelectorAll(
         'script, style, noscript, nav, header, footer, aside, ' +
         '.ad, .ads, .advertisement, .cookie-banner, .popup, .modal, ' +
+        '.sidebar, .menu, .nav, .breadcrumb, .pagination, .footer, ' +
         '[class*="cookie"], [class*="banner"], [id*="cookie"], [id*="banner"], ' +
         '[class*="nav"], [id*="nav"], [class*="menu"], [id*="sidebar"]'
       );
       toRemove.forEach(function(el) { el.remove(); });
 
-      // Prioritize review / salary content areas
-      var reviewSections = document.querySelectorAll(
-        '[class*="review"], [class*="rating"], [class*="salary"], [class*="compensation"], ' +
-        '[class*="pros"], [class*="cons"], [class*="employee"], ' +
-        '[id*="review"], [id*="rating"], article, .content, main, section, [class*="detail"]'
-      );
+      // Prioritize review / salary / pros-cons content areas (expanded selectors)
+      var prioritySelectors = [
+        '[class*="review"]', '[class*="rating"]', '[class*="salary"]',
+        '[class*="compensation"]', '[class*="pros"]', '[class*="cons"]',
+        '[class*="employee"]', '[class*="testimonial"]', '[class*="interview"]',
+        '[id*="review"]', '[id*="rating"]', '[class*="content"]',
+        '[class*="description"]', '[class*="detail"]',
+        '[class*="salary-breakup"]', '[class*="pay"]', '[class*="ctc"]',
+        '[class*="compensation-panel"]', '[class*="hike"]',
+        '[class*="benefits"]', '[class*="perks"]',
+        '[class*="overview"]', '[class*="highlights"]',
+        '[data-testid*="salary"]', '[data-testid*="review"]',
+        'article', '.content', 'main', '.job-detail', '.job-description',
+      ];
+      var allText = '';
+      var seenEls = new Set();
 
-      var text = '';
-      if (reviewSections.length > 0) {
-        reviewSections.forEach(function(el) {
-          text += (el.innerText || el.textContent || '') + '\\n\\n';
-        });
+      for (var s = 0; s < prioritySelectors.length; s++) {
+        var els = document.querySelectorAll(prioritySelectors[s]);
+        for (var i = 0; i < els.length; i++) {
+          if (seenEls.has(els[i])) continue;
+          seenEls.add(els[i]);
+          allText += (els[i].innerText || els[i].textContent || '') + '\\n\\n';
+        }
       }
 
-      // Fallback to full body text
-      if (text.trim().length < 200) {
-        text = document.body.innerText || document.body.textContent || '';
+      // Fallback to full body text if not enough content found
+      if (allText.trim().length < 200 && document && document.body) {
+        allText = document.body.innerText || document.body.textContent || '';
       }
 
-      return text.trim().substring(0, 50000);
+      return allText.trim().substring(0, 100000);
     }
 
-    // Try immediately
-    var text = extractContent();
+    // Try immediately (wrap in try-catch so errors fall through to polling)
+    var text = '';
+    try {
+      text = extractContent();
+    } catch(e) {
+      text = '';
+    }
     if (text.length >= 100) {
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CONTENT_EXTRACTION', text: text }));
       return;
     }
 
-    // Wait for dynamic content
+    // Wait for dynamic content (generous polling)
     var attempts = 0;
-    var maxAttempts = 60; // 6 seconds total
+    var maxAttempts = 200; // 20 seconds total — Glassdoor etc. need time to render
 
     var pollInterval = setInterval(function() {
       attempts++;
@@ -204,6 +281,9 @@ const HIGH_VALUE_DOMAINS = [
   'glassdoor', 'ambitionbox', 'levels.fyi', 'payscale', 'indeed',
   'naukri', 'monster', 'comparably', 'teamblind', 'blind',
   'salary.com', 'jobstreet', 'kununu', 'fairygodboss',
+  'glassdoor.co.in', 'groww', 'foundit', 'shine', 'upstox',
+  'ctc', 'salaryexplorer', 'talent.com', 'erieri',
+  '6figr', 'interviewbit', 'geekster', 'cutshort',
 ];
 
 export function cleanAndFilterUrls(
@@ -222,7 +302,7 @@ export function cleanAndFilterUrls(
     if (url.startsWith('//')) {
       url = 'https:' + url;
     } else if (url.startsWith('/')) {
-      url = 'https://html.duckduckgo.com' + url;
+      url = 'https://www.duckduckgo.com' + url;
     }
 
     // Resolve DDG redirect URLs
@@ -233,8 +313,17 @@ export function cleanAndFilterUrls(
       }
     }
 
-    // Resolve Bing redirect URLs
-    if (url.includes('bing.com/ck/a') || url.includes('/url?')) {
+    // Resolve Google redirect URLs
+    if (url.includes('google.com/url?')) {
+      try {
+        const urlObj = new URL(url);
+        const q = urlObj.searchParams.get('q') || urlObj.searchParams.get('url');
+        if (q && q.startsWith('http')) url = decodeURIComponent(q);
+      } catch { /* keep original */ }
+    }
+
+    // Resolve Bing / Yahoo redirect URLs
+    if (url.includes('bing.com/ck/a') || url.includes('search.yahoo.com/')) {
       try {
         const urlObj = new URL(url);
         const q = urlObj.searchParams.get('q') || urlObj.searchParams.get('u');
@@ -273,8 +362,20 @@ export function cleanAndFilterUrls(
 
 // ─── Build Search URLs ────────────────────────────────────────────────────────
 
+function extractSearchQuery(searchUrl: string): string {
+  try {
+    const qMatch = searchUrl.match(/[?&](?:q|p)=([^&]+)/);
+    if (qMatch && qMatch[1]) {
+      return decodeURIComponent(qMatch[1]);
+    }
+    return searchUrl;
+  } catch {
+    return searchUrl;
+  }
+}
+
 function buildSearchUrl(
-  engine: 'duckduckgo' | 'brave' | 'bing',
+  engine: 'duckduckgo' | 'google' | 'brave' | 'bing' | 'yahoo',
   company: string,
   role: string,
   country: string,
@@ -348,12 +449,13 @@ export function useDomainScraper() {
       } else if (data.type === 'ERROR') {
         clearAllTimeouts();
         currentModeRef.current = null;
+        logger.warn('WebView', `Error: ${data.message}`);
         const err = new Error(data.message || 'WebView error');
         if (resolveUrlsRef.current) { resolveUrlsRef.current([]); resolveUrlsRef.current = null; rejectUrlsRef.current = null; }
         if (resolveContentRef.current) { resolveContentRef.current(''); resolveContentRef.current = null; rejectContentRef.current = null; }
       }
     } catch (err) {
-      console.warn('[DomainScraper] Message parse error:', err);
+      logger.warn('WebView', 'Message parse error', err);
     }
   }, [clearAllTimeouts]);
 
@@ -426,7 +528,7 @@ export function useDomainScraper() {
   ): Promise<string[]> => {
     const maxDomains = useAppStore.getState().maxDomainsToScrape;
     const allRawUrls: string[] = [];
-    const engines: Array<'duckduckgo' | 'brave' | 'bing'> = ['duckduckgo', 'brave', 'bing'];
+    const engines: Array<'duckduckgo' | 'google' | 'brave' | 'bing' | 'yahoo'> = ['duckduckgo', 'google', 'brave', 'bing', 'yahoo'];
 
     // Search comprehensively across all templates and engines
     for (const template of APP_CONFIG.searchQueryTemplates) {
@@ -436,21 +538,27 @@ export function useDomainScraper() {
         const searchUrl = buildSearchUrl(engine, company, role, country, state, district, template);
         try {
           const urls = await discoverUrlsForQuery(searchUrl);
+          const query = extractSearchQuery(searchUrl);
+          logger.urlsDiscovered(engine, urls.length, query);
           if (urls.length > 0) {
             allRawUrls.push(...urls);
           }
-        } catch {
-          // Engine failed, try next
+        } catch (err) {
+          logger.warn('Discovery', `${engine} query failed:`, err);
         }
 
         // Optional page 2 pagination to hit higher targets (like 50 domains)
         if (allRawUrls.length < maxDomains) {
           try {
             let page2Url = '';
-            if (engine === 'brave') {
+            if (engine === 'google') {
+              page2Url = `${searchUrl}&start=10`;
+            } else if (engine === 'brave') {
               page2Url = `${searchUrl}&page=2`;
             } else if (engine === 'bing') {
               page2Url = `${searchUrl}&first=11`;
+            } else if (engine === 'yahoo') {
+              page2Url = `${searchUrl}&b=11`;
             }
             if (page2Url) {
               const urls2 = await discoverUrlsForQuery(page2Url);

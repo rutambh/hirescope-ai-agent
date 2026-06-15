@@ -20,7 +20,7 @@ export function SalaryInput({ label, value, country, icon, onChange }: Props) {
 
   const symbol = country ? country.currencySymbol : '';
   const suffix = country ? country.salaryFormat : '';
-  const placeholder = country ? country.placeholder : 'e.g. 50000';
+  const placeholder = '7.83';
 
   return (
     <View style={styles.container}>
@@ -36,7 +36,11 @@ export function SalaryInput({ label, value, country, icon, onChange }: Props) {
           value={value}
           onChangeText={onChange}
         />
-        {suffix ? <Text style={[styles.suffix, { color: c.textMuted }]}>{suffix}</Text> : null}
+        {suffix ? (
+          <View style={[styles.suffixBadge, { backgroundColor: c.primaryLight, borderColor: c.primary + '30' }]}>
+            <Text style={[styles.suffixText, { color: c.primary }]}>{suffix}</Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -55,5 +59,12 @@ const styles = StyleSheet.create({
   symbol: { fontSize: 16, fontWeight: '600', marginRight: 4 },
   icon: { marginRight: Spacing.sm, fontSize: 16 },
   input: { flex: 1, paddingVertical: Spacing.md, fontSize: 16 },
-  suffix: { fontSize: 13, fontWeight: '500', marginLeft: 4 },
+  suffixBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    marginLeft: Spacing.sm,
+  },
+  suffixText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
 });

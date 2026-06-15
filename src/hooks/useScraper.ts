@@ -19,6 +19,7 @@ import { useAIModel } from './useAIModel';
 import { mergeAllResults } from '../utils/merger';
 import { APP_CONFIG } from '../constants/config';
 import { RawDataPoint, SearchRecord } from '../types';
+import { logger } from '../utils/logger';
 
 export function useScraper() {
   const domainScraper = useDomainScraper();
@@ -60,7 +61,11 @@ export function useScraper() {
   const runScrape = useCallback(async () => {
     const searchStore = useSearchStore.getState();
     const filters = searchStore.activeFilters;
-    if (!filters) return;
+    if (!filters) {
+      logger.warn('Scraper', 'runScrape called with no active filters');
+      return;
+    }
+    logger.phase('start', `Researching ${filters.company} - ${filters.role} in ${filters.country}`);
 
     cancelRequestedRef.current = false;
     startTimeRef.current = Date.now();
@@ -82,6 +87,8 @@ export function useScraper() {
 
       let discoveredUrls: string[] = [];
       try {
+        const location = [filters.country, filters.state, filters.district].filter(Boolean).join(' ');
+        logger.phase('searching', `Discovering URLs for ${filters.company} - ${filters.role} in ${location}`);
         discoveredUrls = await domainScraper.discoverUrls(
           filters.company,
           filters.role,
@@ -90,11 +97,11 @@ export function useScraper() {
           filters.district
         );
       } catch (err) {
-        console.warn('URL discovery failed:', err);
+        logger.error('Discovery', 'URL discovery failed', err);
       }
 
       useSearchStore.getState().setActiveUrlsDiscovered(discoveredUrls.length);
-      console.log(`[Scraper] Discovered ${discoveredUrls.length} URLs`);
+      logger.info('Discovery', `URLs after filtering: ${discoveredUrls.length}`);
 
       if (cancelRequestedRef.current) { cleanupIntervals(); return; }
 
@@ -109,26 +116,39 @@ export function useScraper() {
         if (cancelRequestedRef.current) { cleanupIntervals(); return; }
 
         const url = urlsToProcess[i];
+        let pageText = '';
+
+        // First attempt
         try {
-          const pageText = await domainScraper.scrapeUrl(url);
-          if (pageText && pageText.length > 100) {
-            const point: RawDataPoint = {
-              source: url,
-              rawText: pageText,
-              timestamp: new Date().toISOString(),
-              success: true,
-            };
-            useSearchStore.getState().addActiveRawDataPoint(point);
-            successCount++;
-          }
+          pageText = await domainScraper.scrapeUrl(url);
         } catch (err) {
-          console.warn(`Scrape failed for ${url}:`, err);
+          logger.scrapeFail(url, `first attempt failed, retrying`);
+          // One retry for transient failures
+          try {
+            pageText = await domainScraper.scrapeUrl(url);
+          } catch (err2) {
+            logger.scrapeFail(url, `retry also failed`);
+          }
+        }
+
+        if (pageText && pageText.length > 100) {
+          const point: RawDataPoint = {
+            source: url,
+            rawText: pageText,
+            timestamp: new Date().toISOString(),
+            success: true,
+          };
+          useSearchStore.getState().addActiveRawDataPoint(point);
+          successCount++;
+          logger.scrapeSuccess(url, pageText.length);
+        } else {
+          logger.scrapeFail(url, pageText ? `too short (${pageText.length}c)` : 'empty response');
         }
 
         useSearchStore.getState().setActiveUrlsProcessed(i + 1);
       }
 
-      console.log(`[Scraper] Successfully scraped ${successCount}/${urlsToProcess.length} pages`);
+      logger.phase('extracting', `Scraped ${successCount}/${urlsToProcess.length} pages successfully`);
 
       if (cancelRequestedRef.current) { cleanupIntervals(); return; }
 
@@ -142,24 +162,39 @@ export function useScraper() {
 
       const successPoints = rawDataPoints.filter(p => p.success);
       if (successPoints.length < APP_CONFIG.maxUrlsMinimum) {
-        console.warn(`Only ${successPoints.length} pages scraped — below minimum. Proceeding anyway.`);
+        logger.warn('Scraper', `Only ${successPoints.length} pages scraped — below minimum (${APP_CONFIG.maxUrlsMinimum}). Results may be sparse.`);
       }
 
+      logger.phase('summary', `Merging ${successPoints.length} data points via Summary Engine`);
       let finalResults = mergeAllResults(filters, rawDataPoints, elapsedSeconds);
+      logger.info('Scraper', `Summary Engine complete`, {
+        rating: finalResults.rating,
+        salaryMin: finalResults.salaryMin,
+        salaryMax: finalResults.salaryMax,
+        sourcesCount: finalResults.sourcesCount,
+        confidence: finalResults.confidence,
+      });
 
       // ── Phase 4: AI Enhancement (optional, fails gracefully) ──────────────
       const aiAvailable = await aiModel.checkModelFile();
       if (aiAvailable) {
+        logger.phase('ai-enhance', 'Running on-device AI enhancement');
         try {
           const enhanced = await aiModel.runEnhancement(finalResults, filters);
           if (enhanced) {
             finalResults = { ...finalResults, aiEnhancedSummary: enhanced };
+            logger.aiEnhance('completed successfully');
+          } else {
+            logger.aiEnhance('returned empty output');
           }
-        } catch {
-          // AI enhancement failed — results are still complete without it
+        } catch (err) {
+          logger.aiEnhance(`failed: ${err}`);
         }
+      } else {
+        logger.aiEnhance('model not installed, skipping');
       }
 
+      logger.phase('complete', `Research finished in ${elapsedSeconds}s`);
       useSearchStore.getState().completeSearch(finalResults);
 
       // Save to history

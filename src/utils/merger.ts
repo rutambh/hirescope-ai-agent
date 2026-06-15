@@ -8,6 +8,7 @@ import { FinalResults, RawDataPoint, SearchFilters, StructuredRecord } from '../
 import { extractStructuredRecord } from './dataExtractor';
 import { clusterPros, clusterCons, topThemes } from './themeEngine';
 import { calculateAverage, calculateMedian, removeOutliers } from './outlierDetection';
+import { logger } from './logger';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,8 @@ export function mergeAllResults(
 
   const sourcesCount = records.length;
   const domainsScraped = sourcesCount;
+
+  logger.info('Merger', `Processing ${records.length} records from ${rawDataPoints.length} raw data points`);
 
   // 2. Compile ratings — average of all non-null ratings
   const allRatings = records
@@ -65,6 +68,8 @@ export function mergeAllResults(
     filteredMaxs.length > 0
       ? Math.round(calculateMedian(filteredMaxs)! * 10) / 10
       : null;
+
+  logger.salary(filteredMins.length, `mins (${filteredMins.length} records), max (${filteredMaxs.length} records) → ${salaryMin !== null ? salaryMin : 'null'} - ${salaryMax !== null ? salaryMax : 'null'}`);
 
   // 4. Calculate hike percentages (deterministic formula)
   let hikeMinPercent: number | null = null;

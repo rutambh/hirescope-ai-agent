@@ -92,7 +92,6 @@ export default function ResultsScreen() {
           <RatingStars rating={finalResults.rating} size={32} />
           <Text style={[styles.sourcesText, { color: c.textMuted }]}>
             Based on {finalResults.sourcesCount} pages scraped
-            {finalResults.aiEnhancedSummary ? ' · AI Enhanced ✨' : ' · Summary Engine'}
           </Text>
         </View>
 

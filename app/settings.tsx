@@ -273,10 +273,6 @@ export default function SettingsScreen() {
         {status === 'installed' && (
           <View style={styles.downloadBody}>
             <View style={styles.metaGrid}>
-              <View style={styles.metaItem}>
-                <Text style={[styles.metaLabel, { color: C.textMuted }]}>Engine</Text>
-                <Text style={[styles.metaValue, { color: C.text }]}>Qwen 2.5 0.5B</Text>
-              </View>
               {installedVersion && (
                 <View style={styles.metaItem}>
                   <Text style={[styles.metaLabel, { color: C.textMuted }]}>Version</Text>
@@ -326,10 +322,6 @@ export default function SettingsScreen() {
         {status === 'not_installed' && (
           <View style={styles.downloadBody}>
             <View style={styles.metaGrid}>
-              <View style={styles.metaItem}>
-                <Text style={[styles.metaLabel, { color: C.textMuted }]}>Engine</Text>
-                <Text style={[styles.metaValue, { color: C.text }]}>Qwen 2.5 0.5B</Text>
-              </View>
               <View style={styles.metaItem}>
                 <Text style={[styles.metaLabel, { color: C.textMuted }]}>Size</Text>
                 <Text style={[styles.metaValue, { color: C.text }]}>~{APP_CONFIG.modelExpectedSizeMb} MB</Text>
