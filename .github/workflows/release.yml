@@ -50,7 +50,7 @@ jobs:
 
       - name: Decode Keystore
         run: |
-          echo '${{ secrets.ANDROID_KEYSTORE_BASE64 }}' | base64 --decode > android/app/rutambhapps.jks
+          echo '${{ secrets.ANDROID_KEYSTORE_BASE64 }}' | base64 --decode > android/app/rutambh-hirescope.jks
 
       - name: Configure signing in build.gradle
         run: |
@@ -63,7 +63,7 @@ jobs:
 
           // 1. Insert release block inside signingConfigs right before debug {
           content = content.replace('debug {', `release {
-                      storeFile file("rutambhapps.jks")
+                      storeFile file("rutambh-hirescope.jks")
                       storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
                       keyAlias System.getenv("ANDROID_KEY_ALIAS")
                       keyPassword System.getenv("ANDROID_KEY_PASSWORD")
@@ -77,7 +77,7 @@ jobs:
           
           // Strict Verification check
           const updatedContent = fs.readFileSync(file, 'utf8');
-          if (!updatedContent.includes("rutambhapps.jks") || 
+          if (!updatedContent.includes("rutambh-hirescope.jks") || 
               !updatedContent.includes("signingConfig signingConfigs.release") || 
               updatedContent.includes("MYAPP_RELEASE_STORE_FILE")) {
               console.error("Error: Verification failed! build.gradle signing configuration was not correctly set up.");
