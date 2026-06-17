@@ -26,7 +26,7 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style={theme === 'dark' ? 'light' : theme === 'light' ? 'dark' : 'auto'} />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0B0B1A' } }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="results" options={{ animation: 'slide_from_right' }} />

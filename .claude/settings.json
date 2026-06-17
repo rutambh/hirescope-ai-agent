@@ -1,5 +1,46 @@
 {
-  "enabledPlugins": {
-    "expo@claude-plugins-official": true
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
+    "ANTHROPIC_AUTH_TOKEN": "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",
+    "ANTHROPIC_API_KEY": "",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "openai/gpt-5.1-codex-max",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "openai/gpt-5.2-pro",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "minimax/minimax-m2:exacto",
+    "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
+    "DISABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "alwaysThinkingEnabled": true,
+  "permissions": {
+    "allow": [
+      "Skill(codex-skill)",
+      "Skill(claude-code-settings:codex-skill)",
+      "Skill(nanobanana-skill)",
+      "Skill(claude-code-settings:nanobanana-skill)",
+      "Skill(youtube-transcribe-skill)",
+      "Skill(claude-code-settings:youtube-transcribe-skill)",
+      "Skill(autonomous-skill)",
+      "Skill(claude-code-settings:autonomous-skill)",
+      "Bash(codex:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(rm -fr:*)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(**/*credential*)",
+      "Read(**/*secret*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)"
+    ],
+    "ask": []
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/status-line.sh"
   }
 }

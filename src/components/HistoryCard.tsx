@@ -5,7 +5,7 @@ import { SearchRecord } from '../types';
 import { getCountryByName } from '../constants/countries';
 import { formatSalary } from '../utils/currency';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius, Shadows } from '../constants/theme';
+import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
 
 type Props = {
   record: SearchRecord;
@@ -25,19 +25,14 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
     currencySymbol: filters.currency || '₹', salaryFormat: filters.salaryFormat || 'LPA', placeholder: '',
   };
 
-  const displayMin = (results.salaryMin !== null && filters.currentSalary)
-    ? Math.max(results.salaryMin, filters.currentSalary)
-    : (results.salaryMin !== null ? results.salaryMin : 0);
+  const displayMin = results.salaryMin !== null ? results.salaryMin : 0;
   const displayMax = results.salaryMax !== null ? results.salaryMax : 0;
-
   const formattedMin = displayMin > 0 ? formatSalary(displayMin, country as any) : 'N/A';
   const formattedMax = displayMax > 0 ? formatSalary(displayMax, country as any) : 'N/A';
 
-  const averageSalary = (displayMin > 0 && displayMax > 0)
-    ? (displayMin + displayMax) / 2
-    : null;
-  const averageHikePercent = (averageSalary !== null && filters.currentSalary)
-    ? Math.max(0, Math.round(((averageSalary - filters.currentSalary) / filters.currentSalary) * 100))
+  const avgSalary = (displayMin > 0 && displayMax > 0) ? (displayMin + displayMax) / 2 : null;
+  const avgHike = (avgSalary !== null && filters.currentSalary)
+    ? Math.max(0, Math.round(((avgSalary - filters.currentSalary) / filters.currentSalary) * 100))
     : null;
 
   const getRatingColor = (ratingVal: number | null) => {
@@ -64,103 +59,69 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
   };
 
   return (
-    <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-      <View style={styles.cardBody}>
-        <View style={styles.topRow}>
-          <View style={styles.titleArea}>
-            <View style={styles.companyRow}>
-              <View style={[styles.companyDot, { backgroundColor: c.primary }]} />
-              <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>{filters.company}</Text>
-            </View>
-            <Text style={[styles.role, { color: c.textSecondary }]} numberOfLines={1}>{filters.role}</Text>
+    <TouchableOpacity
+      style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}
+      onPress={() => onView(record)}
+      activeOpacity={0.85}
+    >
+      <View style={styles.topRow}>
+        <View style={styles.titleArea}>
+          <View style={styles.titleRow}>
+            <View style={[styles.dot, { backgroundColor: c.primary }]} />
+            <Text style={[styles.company, { color: c.text }]} numberOfLines={1}>{filters.company}</Text>
           </View>
-          <TouchableOpacity onPress={() => onDelete(record.id)} style={styles.deleteBtn} activeOpacity={0.6}>
-            <Ionicons name="trash-outline" size={18} color={c.danger} />
-          </TouchableOpacity>
+          <Text style={[styles.role, { color: c.textSecondary }]} numberOfLines={1}>{filters.role}</Text>
         </View>
-
-        <View style={styles.metaRow}>
-          <Ionicons name="location-outline" size={12} color={c.primary} />
-          <Text style={[styles.locationText, { color: c.primary }]} numberOfLines={1}>{formatLocation()}</Text>
-          <Text style={[styles.dot, { color: c.textMuted }]}>·</Text>
-          <Ionicons name="time-outline" size={12} color={c.textMuted} />
-          <Text style={[styles.timestamp, { color: c.textMuted }]}>{formatDate(timestamp)}</Text>
-        </View>
-
-        <View style={[styles.statsRow, { backgroundColor: isDark ? c.surfaceAlt : '#F8F9FA' }]}>
-          <View style={styles.stat}>
-            <Text style={[styles.statLabel, { color: c.textMuted }]}>Rating</Text>
-            <Text style={[styles.statValue, { color: getRatingColor(results.rating) }]}>
-              ★ {results.rating !== null ? results.rating.toFixed(1) : 'N/A'}
-            </Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: c.border }]} />
-          <View style={styles.stat}>
-            <Text style={[styles.statLabel, { color: c.textMuted }]}>Salary</Text>
-            <Text style={[styles.statValue, { color: c.text }]} numberOfLines={1}>{formattedMax}</Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: c.border }]} />
-          <View style={styles.stat}>
-            <Text style={[styles.statLabel, { color: c.textMuted }]}>Hike</Text>
-            <Text style={[styles.statValue, { color: c.success }]}>
-              {averageHikePercent !== null ? `+${averageHikePercent}%` : 'N/A'}
-            </Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.viewBtn, { backgroundColor: c.primary }]}
-          onPress={() => onView(record)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.viewBtnText}>View Results</Text>
-          <Ionicons name="arrow-forward" size={16} color="#FFF" />
+        <TouchableOpacity onPress={() => onDelete(record.id)} style={styles.deleteBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="trash-outline" size={16} color={c.danger} />
         </TouchableOpacity>
       </View>
-    </View>
+
+      <View style={styles.metaRow}>
+        <Ionicons name="location-outline" size={11} color={c.primary} />
+        <Text style={[styles.metaText, { color: c.primary }]} numberOfLines={1}>{formatLocation()}</Text>
+        <Text style={[styles.metaDot, { color: c.textMuted }]}>·</Text>
+        <Ionicons name="time-outline" size={11} color={c.textMuted} />
+        <Text style={[styles.metaText, { color: c.textMuted }]}>{formatDate(timestamp)}</Text>
+      </View>
+
+      <View style={[styles.statsRow, { backgroundColor: c.surfaceAlt }]}>
+        <View style={styles.statItem}>
+          <Text style={[styles.statLabel, { color: c.textMuted }]}>Rating</Text>
+          <Text style={[styles.statValue, { color: getRatingColor(results.rating) }]}>
+            {results.rating !== null ? `★ ${results.rating.toFixed(1)}` : '—'}
+          </Text>
+        </View>
+        <View style={[styles.statDivider, { backgroundColor: c.border }]} />
+        <View style={styles.statItem}>
+          <Text style={[styles.statLabel, { color: c.textMuted }]}>Salary</Text>
+          <Text style={[styles.statValue, { color: c.text }]} numberOfLines={1}>{formattedMax}</Text>
+        </View>
+        <View style={[styles.statDivider, { backgroundColor: c.border }]} />
+        <View style={styles.statItem}>
+          <Text style={[styles.statLabel, { color: c.textMuted }]}>Hike</Text>
+          <Text style={[styles.statValue, { color: c.success }]}>{avgHike !== null ? `+${avgHike}%` : '—'}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: Radius.xxl,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  cardBody: { padding: Spacing.lg },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
+  card: { borderRadius: Radius.xl, marginBottom: Spacing.md, borderWidth: 1, padding: Spacing.lg },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   titleArea: { flex: 1, marginRight: Spacing.sm },
-  companyRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: 2 },
-  companyDot: { width: 8, height: 8, borderRadius: Radius.full },
-  title: { fontSize: 17, fontWeight: '700' },
-  role: { fontSize: 13, fontWeight: '500', marginLeft: Spacing.lg + 4 },
-  deleteBtn: { width: 36, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm, marginBottom: Spacing.md, gap: 4, marginLeft: Spacing.lg + 4 },
-  locationText: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
-  dot: { fontSize: 12, marginHorizontal: 2 },
-  timestamp: { fontSize: 11 },
-  statsRow: {
-    flexDirection: 'row',
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  stat: { flex: 1, alignItems: 'center' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: 2 },
+  dot: { width: 7, height: 7, borderRadius: 3.5 },
+  company: { fontSize: 16, fontWeight: '700' },
+  role: { fontSize: 12, fontWeight: '500', marginLeft: Spacing.lg + 2 },
+  deleteBtn: { width: 32, height: 32, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.xs, marginBottom: Spacing.md, gap: 3, marginLeft: Spacing.lg + 2 },
+  metaText: { fontSize: 11, fontWeight: '500', flexShrink: 1 },
+  metaDot: { fontSize: 11, marginHorizontal: 1 },
+  statsRow: { flexDirection: 'row', borderRadius: Radius.md, padding: Spacing.sm },
+  statItem: { flex: 1, alignItems: 'center' },
   statDivider: { width: 1, marginHorizontal: Spacing.xs },
-  statLabel: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  statLabel: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 },
   statValue: { fontSize: 12, fontWeight: '700' },
-  viewBtn: {
-    flexDirection: 'row',
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.sm + 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-  },
-  viewBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 });

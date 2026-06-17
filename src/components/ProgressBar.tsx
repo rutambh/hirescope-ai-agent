@@ -9,33 +9,26 @@ type Props = {
   showPercent?: boolean;
 };
 
-export function ProgressBar({ progress, height = 6, showPercent = true }: Props) {
+export function ProgressBar({ progress, height = 5, showPercent = false }: Props) {
   const { theme } = useAppStore();
   const systemColorScheme = useColorScheme();
-  const animatedValue = useRef(new Animated.Value(0)).current;
+  const animValue = useRef(new Animated.Value(0)).current;
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
   const c = isDark ? DarkColors : LightColors;
 
   useEffect(() => {
-    Animated.timing(animatedValue, {
-      toValue: progress,
-      duration: 600,
-      useNativeDriver: false,
-    }).start();
-  }, [progress, animatedValue]);
+    Animated.timing(animValue, { toValue: progress, duration: 500, useNativeDriver: false }).start();
+  }, [progress]);
 
-  const widthInterpolate = animatedValue.interpolate({
-    inputRange: [0, 100],
-    outputRange: ['0%', '100%'],
-  });
+  const width = animValue.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
 
   return (
     <View style={styles.container}>
-      <View style={[styles.track, { height, backgroundColor: isDark ? '#1E293B' : '#E2E8F0' }]}>
-        <Animated.View style={[styles.fill, { width: widthInterpolate, backgroundColor: c.primary }]} />
+      <View style={[styles.track, { height, backgroundColor: isDark ? '#1E1E3A' : '#E2E8F0' }]}>
+        <Animated.View style={[styles.fill, { width, backgroundColor: c.primary }]} />
       </View>
       {showPercent && (
-        <Text style={[styles.percentText, { color: c.textSecondary }]}>{Math.round(progress)}%</Text>
+        <Text style={[styles.label, { color: c.textMuted }]}>{Math.round(progress)}%</Text>
       )}
     </View>
   );
@@ -43,16 +36,7 @@ export function ProgressBar({ progress, height = 6, showPercent = true }: Props)
 
 const styles = StyleSheet.create({
   container: { marginTop: Spacing.sm, width: '100%' },
-  track: {
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-    position: 'relative',
-  },
+  track: { borderRadius: Radius.full, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: Radius.full },
-  percentText: {
-    marginTop: Spacing.xs,
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'right',
-  },
+  label: { marginTop: Spacing.xs, fontSize: 11, fontWeight: '600', textAlign: 'right' },
 });

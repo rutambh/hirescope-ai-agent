@@ -1,30 +1,22 @@
-// src/hooks/useAIModel.ts
-//
-// Manages the optional on-device Qwen 2.5 0.5B GGUF model lifecycle:
-// download (with pause/resume/cancel), validation, inference.
-//
-// Uses expo-file-system for download management.
-// Uses llama.rn for GGUF inference.
-//
-// IMPORTANT: If the model is not installed or inference fails for ANY reason,
-// this hook returns null and the caller falls back to Summary Engine output.
-
 import { useCallback, useRef } from 'react';
 import * as FileSystem from 'expo-file-system';
 import { useAIModelStore } from '../store/aiModelStore';
 import { APP_CONFIG } from '../constants/config';
-import { buildAIPrompt, buildAIInput } from '../utils/aiEnhancer';
+import {
+  buildExtractionPrompt, buildEnhancementPrompt,
+  buildEnhancementInput, parseExtractionJson,
+} from '../utils/aiEnhancer';
 import { FinalResults, SearchFilters } from '../types';
+import { logger } from '../utils/logger';
 
 const MODEL_DIR = `${FileSystem.documentDirectory}models/`;
 const MODEL_PATH = `${MODEL_DIR}model.gguf`;
 
-// Lazy import llama.rn — fails gracefully if not available
 let llamaModule: any = null;
 try {
   llamaModule = require('llama.rn');
 } catch {
-  // llama.rn not installed — AI enhancement will be unavailable
+  // llama.rn not installed
 }
 
 export function useAIModel() {
@@ -33,17 +25,12 @@ export function useAIModel() {
   const inferenceContextRef = useRef<any>(null);
   const downloadCancelledRef = useRef<boolean>(false);
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────
-
   const ensureModelDir = async () => {
     const info = await FileSystem.getInfoAsync(MODEL_DIR);
     if (!info.exists) {
       await FileSystem.makeDirectoryAsync(MODEL_DIR, { intermediates: true });
     }
   };
-
-  // Speed is calculated inside the throttled onProgress callback
-  // to avoid race conditions between two separate update sources.
 
   // ─── Download ─────────────────────────────────────────────────────────────
 
@@ -53,7 +40,6 @@ export function useAIModel() {
       await ensureModelDir();
       store.setStatus('downloading');
 
-      // Initialize total bytes upfront — stable reference prevents flickering
       const stableTotalBytes = APP_CONFIG.modelExpectedSizeMb * 1024 * 1024;
       store.setProgress(0, stableTotalBytes, 0);
 
@@ -67,13 +53,10 @@ export function useAIModel() {
         const now = Date.now();
         const elapsed = now - lastUpdateTime;
         if (elapsed < THROTTLE_MS) return;
-
         const bytesDelta = currentBytes - lastBytesForSpeed;
         const speed = elapsed > 0 ? Math.round((bytesDelta / elapsed) * 1000) : 0;
-
         lastUpdateTime = now;
         lastBytesForSpeed = currentBytes;
-
         const total = progress.totalBytesExpectedToWrite;
         store.setProgress(currentBytes, total > 0 ? total : stableTotalBytes, Math.max(0, speed));
       };
@@ -83,46 +66,27 @@ export function useAIModel() {
 
       if (resumeUri) {
         downloadResumable = new FileSystem.DownloadResumable(
-          APP_CONFIG.modelDownloadUrl,
-          MODEL_PATH,
-          {},
-          onProgress,
-          resumeUri
+          APP_CONFIG.modelDownloadUrl, MODEL_PATH, {}, onProgress, resumeUri
         );
       } else {
         downloadResumable = FileSystem.createDownloadResumable(
-          APP_CONFIG.modelDownloadUrl,
-          MODEL_PATH,
-          {},
-          onProgress
+          APP_CONFIG.modelDownloadUrl, MODEL_PATH, {}, onProgress
         );
       }
 
       downloadResumableRef.current = downloadResumable;
-
       const result = await downloadResumable.downloadAsync();
-
-      // If download was paused/cancelled, don't proceed with validation
       if (downloadCancelledRef.current) return;
+      if (!result || !result.uri) throw new Error('Download returned no file URI');
 
-      if (!result || !result.uri) {
-        throw new Error('Download returned no file URI');
-      }
-
-      // Final progress capture before validation
       store.setProgress(currentBytes > 0 ? currentBytes : stableTotalBytes, stableTotalBytes, 0);
       store.setStatus('validating');
       await validateModel();
-
       store.setInstalled(APP_CONFIG.modelVersion);
     } catch (err: any) {
-      // If we intentionally paused/cancelled, ignore the error silently
       if (downloadCancelledRef.current) return;
-      if (err?.message?.includes('cancelled')) {
-        store.resetDownload();
-      } else {
-        store.setError(err?.message ?? 'Download failed');
-      }
+      if (err?.message?.includes('cancelled')) store.resetDownload();
+      else store.setError(err?.message ?? 'Download failed');
     }
   }, [store]);
 
@@ -138,45 +102,26 @@ export function useAIModel() {
     }
   }, [store]);
 
-  const resumeDownload = useCallback(async () => {
-    await downloadModel();
-  }, [downloadModel]);
+  const resumeDownload = useCallback(async () => { await downloadModel(); }, [downloadModel]);
 
   const cancelDownload = useCallback(async () => {
     downloadCancelledRef.current = true;
     if (downloadResumableRef.current) {
-      try {
-        await downloadResumableRef.current.cancelAsync();
-      } catch {
-        // ignore
-      }
+      try { await downloadResumableRef.current.cancelAsync(); } catch { }
       downloadResumableRef.current = null;
     }
-    // Delete partial file
-    try {
-      await FileSystem.deleteAsync(MODEL_PATH, { idempotent: true });
-    } catch {
-      // ignore
-    }
+    try { await FileSystem.deleteAsync(MODEL_PATH, { idempotent: true }); } catch { }
     store.resetDownload();
   }, [store]);
 
-  // ─── Validation ──────────────────────────────────────────────────────────
-
   const validateModel = useCallback(async (): Promise<void> => {
     const info = await FileSystem.getInfoAsync(MODEL_PATH);
-    if (!info.exists) {
-      throw new Error('Model file not found after download');
-    }
-
-    // Size sanity check: must be at least 100 MB
+    if (!info.exists) throw new Error('Model file not found after download');
     const fileSizeBytes = (info as any).size ?? 0;
     if (fileSizeBytes < 100 * 1024 * 1024) {
       await FileSystem.deleteAsync(MODEL_PATH, { idempotent: true });
       throw new Error('Model file too small — possibly corrupted');
     }
-
-    // If a checksum is configured, verify it
     if (APP_CONFIG.modelExpectedChecksum) {
       const Crypto = await import('expo-crypto');
       const hash = await Crypto.digestStringAsync(
@@ -191,12 +136,10 @@ export function useAIModel() {
     }
   }, []);
 
-  // ─── Delete ──────────────────────────────────────────────────────────────
-
   const deleteModel = useCallback(async () => {
     try {
       if (inferenceContextRef.current) {
-        try { await inferenceContextRef.current.release(); } catch { /* ignore */ }
+        try { await inferenceContextRef.current.release(); } catch { }
         inferenceContextRef.current = null;
       }
       await FileSystem.deleteAsync(MODEL_PATH, { idempotent: true });
@@ -206,88 +149,151 @@ export function useAIModel() {
     }
   }, [store]);
 
-  // ─── Inference ───────────────────────────────────────────────────────────
+  // ─── Init Context ─────────────────────────────────────────────────────────
+
+  const ensureContext = useCallback(async (nCtx = 4096) => {
+    if (!llamaModule) throw new Error('llama.rn not available');
+    const info = await FileSystem.getInfoAsync(MODEL_PATH);
+    if (!info.exists) throw new Error('Model file not found');
+    if (!inferenceContextRef.current) {
+      inferenceContextRef.current = await llamaModule.initLlama({
+        model: MODEL_PATH,
+        n_ctx: nCtx,
+        n_threads: 4,
+      });
+    }
+    return inferenceContextRef.current;
+  }, []);
+
+  // ─── SLM Extraction: Raw pages → Structured data ──────────────────────────
+
+  const extractFromPages = useCallback(async (
+    rawTexts: string[],
+    filters: SearchFilters
+  ): Promise<FinalResults | null> => {
+    if (store.status !== 'installed') return null;
+    if (!llamaModule) return null;
+    if (rawTexts.length === 0) return null;
+
+    try {
+      const ctx = await ensureContext(8192);
+      const allText = rawTexts.join('\n\n--- NEXT PAGE ---\n\n');
+      const prompt = buildExtractionPrompt(allText, filters, rawTexts.length);
+
+      const result = await ctx.completion({
+        prompt,
+        n_predict: 800,
+        temperature: 0.1,
+        top_p: 0.9,
+        stop: ['\n\n\n'],
+      });
+
+      const text = (result as any)?.text?.trim();
+      if (!text || text.length < 10) return null;
+
+      const extracted = parseExtractionJson(text);
+      if (!extracted) {
+        logger.warn('AI Extraction', 'Failed to parse JSON from model output');
+        return null;
+      }
+
+      logger.info('AI Extraction', `Extracted: rating=${extracted.rating}, salary=${extracted.salaryMin}-${extracted.salaryMax}, pros=${extracted.pros.length}, cons=${extracted.cons.length}`);
+
+      // Compute hike percentages
+      const current = filters.currentSalary;
+      let hikeMin: number | null = null;
+      let hikeMax: number | null = null;
+      if (current > 0) {
+        if (extracted.salaryMin !== null) hikeMin = Math.max(0, Math.round(((extracted.salaryMin - current) / current) * 100));
+        if (extracted.salaryMax !== null) hikeMax = Math.max(0, Math.round(((extracted.salaryMax - current) / current) * 100));
+      }
+
+      const sourceCount = rawTexts.filter(t => t.length > 100).length;
+      const confidence: FinalResults['confidence'] =
+        sourceCount >= 15 ? 'high' : sourceCount >= 8 ? 'medium' : sourceCount >= 3 ? 'low' : 'minimal';
+
+      return {
+        rating: extracted.rating,
+        salaryMin: extracted.salaryMin,
+        salaryMax: extracted.salaryMax,
+        hikeMinPercent: hikeMin,
+        hikeMaxPercent: hikeMax,
+        positives: extracted.pros.slice(0, 10),
+        negatives: extracted.cons.slice(0, 10),
+        sourcesCount: sourceCount,
+        domainsScraped: rawTexts.length,
+        confidence,
+        timeElapsedSeconds: 0,
+      };
+    } catch (err: any) {
+      logger.warn('AI Extraction', `Failed: ${err?.message}`);
+      if (inferenceContextRef.current) {
+        try { await inferenceContextRef.current.release(); } catch { }
+        inferenceContextRef.current = null;
+      }
+      return null;
+    }
+  }, [store, ensureContext]);
+
+  // ─── Enhancement: Structured data → Natural language summary ──────────────
 
   const runEnhancement = useCallback(async (
     results: FinalResults,
     filters: SearchFilters
   ): Promise<string | null> => {
-    // Guard: model not available
     if (store.status !== 'installed') return null;
     if (!llamaModule) return null;
 
-    const modelInfo = await FileSystem.getInfoAsync(MODEL_PATH);
-    if (!modelInfo.exists) {
-      store.resetAll();
-      return null;
-    }
-
     try {
-      // Initialize context if not already loaded
-      if (!inferenceContextRef.current) {
-        inferenceContextRef.current = await llamaModule.initLlama({
-          model: MODEL_PATH,
-          n_ctx: 1024,         // Larger context for richer summaries
-          n_threads: 4,         // Better utilization on modern devices
-        });
-      }
+      const ctx = await ensureContext(2048);
+      const input = buildEnhancementInput(results, filters);
+      const prompt = buildEnhancementPrompt(input);
 
-      const input = buildAIInput(results, filters);
-      const prompt = buildAIPrompt(input);
-
-      // Run with timeout
-      const inferencePromise = inferenceContextRef.current.completion({
+      const inferencePromise = ctx.completion({
         prompt,
-        n_predict: 300,        // More tokens for a thorough summary
-        temperature: 0.2,      // Lower temperature for more factual output
+        n_predict: 300,
+        temperature: 0.2,
         top_p: 0.85,
         stop: ['\n\n', 'Data:', 'Company:', 'Location:'],
       });
 
       const timeoutPromise = new Promise<null>((_, reject) =>
-        setTimeout(() => reject(new Error('Inference timeout')), APP_CONFIG.aiInferenceTimeoutMs)
+        setTimeout(() => reject(new Error('Timeout')), APP_CONFIG.aiInferenceTimeoutMs)
       );
 
       const result = await Promise.race([inferencePromise, timeoutPromise]);
       const text = (result as any)?.text?.trim();
       return text && text.length > 10 ? text : null;
     } catch (err: any) {
-      console.warn('AI enhancement failed (fallback to Summary Engine):', err?.message);
-      // Release context on error to free memory
+      logger.warn('AI Enhancement', `Failed: ${err?.message}`);
       if (inferenceContextRef.current) {
-        try { await inferenceContextRef.current.release(); } catch { /* ignore */ }
+        try { await inferenceContextRef.current.release(); } catch { }
         inferenceContextRef.current = null;
       }
       return null;
     }
-  }, [store]);
-
-  // ─── Model File Check ─────────────────────────────────────────────────────
+  }, [store, ensureContext]);
 
   const checkModelFile = useCallback(async (): Promise<boolean> => {
     try {
       const info = await FileSystem.getInfoAsync(MODEL_PATH);
       return info.exists && ((info as any).size ?? 0) > 100 * 1024 * 1024;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }, []);
 
   return {
-    // State (from store)
     status: store.status,
     downloadedBytes: store.downloadedBytes,
     totalBytes: store.totalBytes,
     speedBytesPerSec: store.speedBytesPerSec,
     errorMessage: store.errorMessage,
     installedVersion: store.installedVersion,
-
-    // Actions
     downloadModel,
     pauseDownload,
     resumeDownload,
     cancelDownload,
     deleteModel,
+    extractFromPages,
     runEnhancement,
     checkModelFile,
   };

@@ -3,9 +3,9 @@ import { View, Text, StyleSheet, useColorScheme } from 'react-native';
 import { useAppStore } from '../store/appStore';
 import { LightColors, DarkColors, Spacing } from '../constants/theme';
 
-type Props = { rating: number | null; size?: number; };
+type Props = { rating: number | null; size?: number };
 
-export function RatingStars({ rating, size = 24 }: Props) {
+export function RatingStars({ rating, size = 28 }: Props) {
   const { theme } = useAppStore();
   const systemColorScheme = useColorScheme();
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
@@ -14,22 +14,12 @@ export function RatingStars({ rating, size = 24 }: Props) {
   if (rating === null || isNaN(rating)) {
     return (
       <View style={styles.container}>
-        <Text style={[styles.noRatingText, { color: c.textMuted, fontSize: size - 4 }]}>No Rating Available</Text>
+        <Text style={[styles.noRatingText, { color: c.textMuted, fontSize: size - 8 }]}>—</Text>
       </View>
     );
   }
 
   const roundedRating = Math.round(rating * 2) / 2;
-  const stars = [];
-  for (let i = 1; i <= 5; i++) {
-    if (i <= roundedRating) {
-      stars.push(<Text key={i} style={[styles.star, { fontSize: size, color: c.star }]}>★</Text>);
-    } else if (i - 0.5 === roundedRating) {
-      stars.push(<Text key={i} style={[styles.starHalf, { fontSize: size, color: c.star }]}>★</Text>);
-    } else {
-      stars.push(<Text key={i} style={[styles.starEmpty, { fontSize: size, color: c.textMuted }]}>★</Text>);
-    }
-  }
 
   const getRatingColor = (r: number) => {
     if (r >= 4) return c.success;
@@ -39,20 +29,40 @@ export function RatingStars({ rating, size = 24 }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.starsRow}>{stars}</View>
-      <Text style={[styles.ratingValue, { fontSize: size - 4, color: getRatingColor(rating) }]}>
-        {rating.toFixed(1)} / 5
-      </Text>
+      <View style={styles.ring}>
+        <Text style={[styles.bigNumber, { color: getRatingColor(rating) }]}>{rating.toFixed(1)}</Text>
+        <Text style={[styles.outOf, { color: c.textMuted }]}>/5</Text>
+      </View>
+      <View style={styles.starsRow}>
+        {[1, 2, 3, 4, 5].map((i) => {
+          const filled = i <= Math.floor(roundedRating);
+          const half = !filled && i - 0.5 === roundedRating;
+          return (
+            <Text
+              key={i}
+              style={[
+                styles.star,
+                { fontSize: size * 0.55 },
+                filled && { color: c.star },
+                half && { color: c.star, opacity: 0.5 },
+                !filled && !half && { color: c.textMuted, opacity: 0.2 },
+              ]}
+            >
+              ★
+            </Text>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { alignItems: 'center', justifyContent: 'center', marginVertical: Spacing.sm },
-  starsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xs },
-  star: { marginHorizontal: 2 },
-  starHalf: { marginHorizontal: 2, opacity: 0.5 },
-  starEmpty: { marginHorizontal: 2, opacity: 0.3 },
-  ratingValue: { fontWeight: '700' },
-  noRatingText: {},
+  container: { alignItems: 'center', justifyContent: 'center', marginVertical: Spacing.xs },
+  ring: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 4 },
+  bigNumber: { fontSize: 42, fontWeight: '800', letterSpacing: -1 },
+  outOf: { fontSize: 16, fontWeight: '600', marginLeft: 2 },
+  starsRow: { flexDirection: 'row', alignItems: 'center' },
+  star: { marginHorizontal: 1 },
+  noRatingText: { fontWeight: '600' },
 });

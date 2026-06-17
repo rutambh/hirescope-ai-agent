@@ -1,13 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  PanResponder,
-  TouchableOpacity,
-  GestureResponderEvent,
-  useColorScheme,
-  Platform,
+  View, Text, StyleSheet, PanResponder, TouchableOpacity,
+  GestureResponderEvent, useColorScheme,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
@@ -25,8 +19,6 @@ type Props = {
 export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChange }: Props) {
   const { theme } = useAppStore();
   const systemColorScheme = useColorScheme();
-  const [trackWidth, setTrackWidth] = useState(0);
-  const containerRef = useRef<View>(null);
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
   const c = isDark ? DarkColors : LightColors;
 
@@ -34,88 +26,66 @@ export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChan
   const trackLeftRef = useRef(0);
 
   const handleLayout = () => {
-    containerRef.current?.measure((_x, _y, width, _h, absoluteX, _aY) => {
-      if (width > 0) {
-        trackWidthRef.current = width;
-        trackLeftRef.current = absoluteX;
-        setTrackWidth(width);
-      }
+    containerRef.current?.measure((_x, _y, width, _h, absoluteX) => {
+      if (width > 0) { trackWidthRef.current = width; trackLeftRef.current = absoluteX; }
     });
   };
 
-  const updateValueFromPageX = (pageX: number) => {
-    const width = trackWidthRef.current;
-    const left = trackLeftRef.current;
-    if (width > 0) {
-      const relativeX = Math.max(0, Math.min(width, pageX - left));
-      const percentage = relativeX / width;
-      const rawVal = min + percentage * (max - min);
-      onChange(Math.round(rawVal));
-    }
+  const updateValue = (pageX: number) => {
+    const relX = Math.max(0, Math.min(trackWidthRef.current, pageX - trackLeftRef.current));
+    const pct = relX / trackWidthRef.current;
+    onChange(Math.round(min + pct * (max - min)));
   };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,
-      onPanResponderGrant: (e: GestureResponderEvent) => {
-        containerRef.current?.measure((_x, _y, width, _h, absoluteX, _aY) => {
-          if (width > 0) {
-            trackWidthRef.current = width;
-            trackLeftRef.current = absoluteX;
-            setTrackWidth(width);
-            updateValueFromPageX(e.nativeEvent.pageX);
-          }
-        });
-      },
-      onPanResponderMove: (e: GestureResponderEvent) => {
-        updateValueFromPageX(e.nativeEvent.pageX);
-      },
+      onPanResponderGrant: (e: GestureResponderEvent) => { updateValue(e.nativeEvent.pageX); },
+      onPanResponderMove: (e: GestureResponderEvent) => { updateValue(e.nativeEvent.pageX); },
     })
   ).current;
 
-  const fillPercentage = ((value - min) / (max - min)) * 100;
+  const containerRef = useRef<View>(null);
+  const fillPct = ((value - min) / (max - min)) * 100;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.labelRow}>
-          <Ionicons name={icon as any} size={14} color={c.textMuted} />
+          <Ionicons name={(icon || 'time-outline') as any} size={14} color={c.textMuted} />
           <Text style={[styles.label, { color: c.textSecondary }]}>{label}</Text>
         </View>
-        <View style={[styles.valueBadge, { backgroundColor: c.primaryLight }]}>
-          <Text style={[styles.valueText, { color: c.primary }]}>
-            {value} {value === 1 ? 'yr' : 'yrs'}
-          </Text>
+        <View style={[styles.pill, { backgroundColor: c.primaryLight }]}>
+          <Text style={[styles.pillText, { color: c.primary }]}>{value} {value === 1 ? 'yr' : 'yrs'}</Text>
         </View>
       </View>
 
       <View style={styles.sliderRow}>
         <TouchableOpacity
-          style={[styles.stepBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+          style={[styles.btn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
           onPress={() => onChange(Math.max(min, value - 1))}
-          activeOpacity={0.7}
         >
-          <Ionicons name="remove" size={20} color={c.text} />
+          <Ionicons name="remove" size={18} color={c.text} />
         </TouchableOpacity>
 
-        <View style={styles.sliderWrapper}>
-          <View ref={containerRef} style={styles.sliderTrackContainer} onLayout={handleLayout} {...panResponder.panHandlers}>
-            <View style={[styles.trackBg, { backgroundColor: isDark ? '#1E293B' : '#CBD5E1' }]}>
-              <View style={[styles.trackFill, { width: `${fillPercentage}%`, backgroundColor: c.primary }]} />
-            </View>
-            <View style={[styles.thumb, { left: `${fillPercentage}%`, borderColor: c.primary, backgroundColor: c.surface }]} />
+        <View
+          ref={containerRef}
+          style={styles.trackContainer}
+          onLayout={handleLayout}
+          {...panResponder.panHandlers}
+        >
+          <View style={[styles.trackBg, { backgroundColor: isDark ? '#1E1E3A' : '#E2E8F0' }]}>
+            <View style={[styles.trackFill, { width: `${fillPct}%`, backgroundColor: c.primary }]} />
           </View>
+          <View style={[styles.thumb, { left: `${fillPct}%`, borderColor: c.primary, backgroundColor: isDark ? '#1A1A35' : '#FFF' }]} />
         </View>
 
         <TouchableOpacity
-          style={[styles.stepBtn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+          style={[styles.btn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
           onPress={() => onChange(Math.min(max, value + 1))}
-          activeOpacity={0.7}
         >
-          <Ionicons name="add" size={20} color={c.text} />
+          <Ionicons name="add" size={18} color={c.text} />
         </TouchableOpacity>
       </View>
     </View>
@@ -124,34 +94,20 @@ export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChan
 
 const styles = StyleSheet.create({
   container: { marginBottom: Spacing.lg },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  label: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
+  label: { fontSize: 12, fontWeight: '600' },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  valueIcon: { marginRight: Spacing.xs },
-  valueBadge: { borderRadius: Radius.full, paddingHorizontal: Spacing.md, paddingVertical: 4, minWidth: 60, alignItems: 'center' },
-  valueText: { fontSize: 14, fontWeight: '700' },
+  pill: { borderRadius: Radius.full, paddingHorizontal: Spacing.md, paddingVertical: 3 },
+  pillText: { fontSize: 13, fontWeight: '700' },
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  stepBtn: { width: 36, height: 36, borderRadius: Radius.full, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  sliderWrapper: { flex: 1 },
-  sliderTrackContainer: { height: 28, justifyContent: 'center' },
+  btn: { width: 34, height: 34, borderRadius: Radius.full, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  trackContainer: { flex: 1, height: 28, justifyContent: 'center' },
   trackBg: { height: 4, borderRadius: Radius.full, overflow: 'hidden' },
   trackFill: { height: '100%', borderRadius: Radius.full },
   thumb: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    borderWidth: 3,
-    marginLeft: -10,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    position: 'absolute', width: 20, height: 20, borderRadius: Radius.full,
+    borderWidth: 3, marginLeft: -10,
+    shadowColor: '#8B5CF6', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3, shadowRadius: 4, elevation: 4,
   },
 });

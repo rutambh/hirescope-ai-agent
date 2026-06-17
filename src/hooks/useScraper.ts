@@ -1,19 +1,8 @@
-// src/hooks/useScraper.ts
-//
-// Master orchestrator for the V5 search pipeline:
-//
-//   Phase 1 (searching):  Multi-query URL discovery across DDG/Brave/Bing
-//   Phase 2 (extracting): Serial page scraping up to target URL count
-//   Phase 3 (summary):    Deterministic Summary Engine (always runs)
-//   Phase 4 (AI):         Optional on-device Qwen enhancement (fails gracefully)
-//
-// Search never fails. Summary Engine is always the primary result.
-
 import { useRef, useCallback, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
 import { useSearchStore } from '../store/searchStore';
 import { useHistoryStore } from '../store/historyStore';
-import { useDomainScraper } from './useDomainScraper';
+import { useDomainScraper, cancelAllFetches } from './useDomainScraper';
 import { useNotification } from './useNotification';
 import { useAIModel } from './useAIModel';
 import { mergeAllResults } from '../utils/merger';
@@ -21,29 +10,41 @@ import { APP_CONFIG } from '../constants/config';
 import { RawDataPoint, SearchRecord } from '../types';
 import { logger } from '../utils/logger';
 
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Module-level cancel flag — shared across all hook instances
+let globalCancelFlag = false;
+
+export function setCancelFlag() {
+  globalCancelFlag = true;
+  cancelAllFetches();
+}
+
 export function useScraper() {
   const domainScraper = useDomainScraper();
   const { triggerSearchCompleteNotification } = useNotification();
   const aiModel = useAIModel();
 
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const cancelRequestedRef = useRef<boolean>(false);
   const startTimeRef = useRef<number>(0);
-  const webViewRefRef = useRef<any>(null);
 
-  // Cleanup on unmount
+  // Keep a ref to the latest filters for the cancel check
+  const filtersRef = useRef(useSearchStore.getState().activeFilters);
+
   useEffect(() => {
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-    };
+    const sub = useSearchStore.subscribe((state) => {
+      filtersRef.current = state.activeFilters;
+    });
+    return () => sub();
   }, []);
 
-  const setWebViewRef = useCallback((ref: any) => {
-    webViewRefRef.current = ref;
-    domainScraper.setWebViewRef(ref);
-  }, [domainScraper]);
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    };
+  }, []);
 
   const cleanupIntervals = useCallback(() => {
     if (progressIntervalRef.current) {
@@ -53,10 +54,20 @@ export function useScraper() {
   }, []);
 
   const handleCancel = useCallback(() => {
-    cancelRequestedRef.current = true;
+    setCancelFlag();
     cleanupIntervals();
     useSearchStore.getState().cancelSearch();
   }, [cleanupIntervals]);
+
+  const setWebViewRef = useCallback((_ref: any) => {
+    domainScraper.setWebViewRef(_ref);
+  }, [domainScraper]);
+
+  const isCancelled = useCallback((): boolean => {
+    if (globalCancelFlag) return true;
+    if (useSearchStore.getState().activePhase === 'idle') return true;
+    return false;
+  }, []);
 
   const runScrape = useCallback(async () => {
     const searchStore = useSearchStore.getState();
@@ -65,20 +76,18 @@ export function useScraper() {
       logger.warn('Scraper', 'runScrape called with no active filters');
       return;
     }
-    logger.phase('start', `Researching ${filters.company} - ${filters.role} in ${filters.country}`);
 
-    cancelRequestedRef.current = false;
+    globalCancelFlag = false;
+    logger.phase('start', `Researching ${filters.company} - ${filters.role} in ${filters.country}`);
     startTimeRef.current = Date.now();
     const totalDurationMs = APP_CONFIG.totalTimeoutMs;
 
-    // Progress ticker
     cleanupIntervals();
     progressIntervalRef.current = setInterval(() => {
       const elapsedMs = Date.now() - startTimeRef.current;
       const remainingSecs = Math.max(0, Math.floor((totalDurationMs - elapsedMs) / 1000));
       useSearchStore.getState().setActiveEstimatedSecondsRemaining(remainingSecs);
-      const percent = Math.min(90, Math.floor((elapsedMs / totalDurationMs) * 100));
-      useSearchStore.getState().setActiveProgress(percent);
+      useSearchStore.getState().setActiveProgress(Math.min(90, Math.floor((elapsedMs / totalDurationMs) * 100)));
     }, 1000);
 
     try {
@@ -87,14 +96,9 @@ export function useScraper() {
 
       let discoveredUrls: string[] = [];
       try {
-        const location = [filters.country, filters.state, filters.district].filter(Boolean).join(' ');
-        logger.phase('searching', `Discovering URLs for ${filters.company} - ${filters.role} in ${location}`);
+        logger.phase('searching', `Discovering URLs for ${filters.company} - ${filters.role}`);
         discoveredUrls = await domainScraper.discoverUrls(
-          filters.company,
-          filters.role,
-          filters.country,
-          filters.state,
-          filters.district
+          filters.company, filters.role, filters.country, filters.state, filters.district
         );
       } catch (err) {
         logger.error('Discovery', 'URL discovery failed', err);
@@ -103,9 +107,9 @@ export function useScraper() {
       useSearchStore.getState().setActiveUrlsDiscovered(discoveredUrls.length);
       logger.info('Discovery', `URLs after filtering: ${discoveredUrls.length}`);
 
-      if (cancelRequestedRef.current) { cleanupIntervals(); return; }
+      if (isCancelled()) { cleanupIntervals(); return; }
 
-      // ── Phase 2: Page Extraction ──────────────────────────────────────────
+      // ── Phase 2: Page Scraping ────────────────────────────────────────────
       useSearchStore.getState().setActivePhase('extracting');
 
       const maxDomains = useAppStore.getState().maxDomainsToScrape;
@@ -113,88 +117,88 @@ export function useScraper() {
       let successCount = 0;
 
       for (let i = 0; i < urlsToProcess.length; i++) {
-        if (cancelRequestedRef.current) { cleanupIntervals(); return; }
+        if (isCancelled()) { cleanupIntervals(); return; }
 
         const url = urlsToProcess[i];
         let pageText = '';
 
-        // First attempt
         try {
           pageText = await domainScraper.scrapeUrl(url);
-        } catch (err) {
-          logger.scrapeFail(url, `first attempt failed, retrying`);
-          // One retry for transient failures
-          try {
-            pageText = await domainScraper.scrapeUrl(url);
-          } catch (err2) {
-            logger.scrapeFail(url, `retry also failed`);
-          }
+        } catch { }
+
+        // Retry once if too short
+        if (pageText.length < 100) {
+          await delay(300 + Math.random() * 400);
+          try { pageText = await domainScraper.scrapeUrl(url); } catch { }
         }
 
-        if (pageText && pageText.length > 100) {
-          const point: RawDataPoint = {
-            source: url,
-            rawText: pageText,
-            timestamp: new Date().toISOString(),
-            success: true,
-          };
-          useSearchStore.getState().addActiveRawDataPoint(point);
+        if (pageText.length > 100) {
+          useSearchStore.getState().addActiveRawDataPoint({
+            source: url, rawText: pageText,
+            timestamp: new Date().toISOString(), success: true,
+          });
           successCount++;
           logger.scrapeSuccess(url, pageText.length);
         } else {
-          logger.scrapeFail(url, pageText ? `too short (${pageText.length}c)` : 'empty response');
+          logger.scrapeFail(url, pageText ? `too short (${pageText.length}c)` : 'empty');
         }
 
         useSearchStore.getState().setActiveUrlsProcessed(i + 1);
+
+        // Random delay between pages to avoid rate limiting
+        if (i < urlsToProcess.length - 1) {
+          await delay(200 + Math.random() * 400);
+        }
       }
 
-      logger.phase('extracting', `Scraped ${successCount}/${urlsToProcess.length} pages successfully`);
+      logger.phase('extracting', `Scraped ${successCount}/${urlsToProcess.length} pages`);
+      if (isCancelled()) { cleanupIntervals(); return; }
 
-      if (cancelRequestedRef.current) { cleanupIntervals(); return; }
-
-      // ── Phase 3: Summary Engine (deterministic, always runs) ──────────────
+      // ── Phase 3: Data Extraction ──────────────────────────────────────────
       cleanupIntervals();
-      useSearchStore.getState().setActiveProgress(95);
+      useSearchStore.getState().setActiveProgress(92);
 
       const elapsedSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
-      const currentState = useSearchStore.getState();
-      const rawDataPoints = currentState.activeRawDataPoints;
-
+      const rawDataPoints = useSearchStore.getState().activeRawDataPoints;
       const successPoints = rawDataPoints.filter(p => p.success);
-      if (successPoints.length < APP_CONFIG.maxUrlsMinimum) {
-        logger.warn('Scraper', `Only ${successPoints.length} pages scraped — below minimum (${APP_CONFIG.maxUrlsMinimum}). Results may be sparse.`);
+
+      logger.phase('summary', `Processing ${successPoints.length} pages`);
+
+      let finalResults;
+      const aiAvailable = await aiModel.checkModelFile();
+
+      if (aiAvailable) {
+        logger.phase('ai-extract', 'Running SLM extraction on all pages');
+        const rawTexts = successPoints.map(p => p.rawText);
+        const slmResults = await aiModel.extractFromPages(rawTexts, filters);
+        if (slmResults) {
+          finalResults = { ...slmResults, timeElapsedSeconds: elapsedSeconds };
+          logger.info('Scraper', 'SLM extraction successful');
+        } else {
+          logger.warn('Scraper', 'SLM failed — falling back to Summary Engine');
+          finalResults = mergeAllResults(filters, rawDataPoints, elapsedSeconds);
+        }
+      } else {
+        logger.phase('summary', 'No AI model — using deterministic Summary Engine');
+        finalResults = mergeAllResults(filters, rawDataPoints, elapsedSeconds);
       }
 
-      logger.phase('summary', `Merging ${successPoints.length} data points via Summary Engine`);
-      let finalResults = mergeAllResults(filters, rawDataPoints, elapsedSeconds);
-      logger.info('Scraper', `Summary Engine complete`, {
-        rating: finalResults.rating,
-        salaryMin: finalResults.salaryMin,
-        salaryMax: finalResults.salaryMax,
-        sourcesCount: finalResults.sourcesCount,
-        confidence: finalResults.confidence,
-      });
+      useSearchStore.getState().setActiveProgress(96);
 
-      // ── Phase 4: AI Enhancement (optional, fails gracefully) ──────────────
-      const aiAvailable = await aiModel.checkModelFile();
+      // ── Phase 4: AI Enhancement (optional summary) ────────────────────────
       if (aiAvailable) {
-        logger.phase('ai-enhance', 'Running on-device AI enhancement');
+        logger.phase('ai-enhance', 'Running AI enhancement summary');
         try {
           const enhanced = await aiModel.runEnhancement(finalResults, filters);
-          if (enhanced) {
-            finalResults = { ...finalResults, aiEnhancedSummary: enhanced };
-            logger.aiEnhance('completed successfully');
-          } else {
-            logger.aiEnhance('returned empty output');
-          }
+          if (enhanced) finalResults = { ...finalResults, aiEnhancedSummary: enhanced };
         } catch (err) {
           logger.aiEnhance(`failed: ${err}`);
         }
-      } else {
-        logger.aiEnhance('model not installed, skipping');
       }
 
-      logger.phase('complete', `Research finished in ${elapsedSeconds}s`);
+      // ── Phase 5: Complete ─────────────────────────────────────────────────
+      logger.phase('complete', `Finished in ${elapsedSeconds}s`);
+      useSearchStore.getState().setActiveProgress(100);
       useSearchStore.getState().completeSearch(finalResults);
 
       // Save to history
@@ -206,15 +210,17 @@ export function useScraper() {
       };
       useHistoryStore.getState().addSearch(record);
 
-      // Local notification
+      // ── Cleanup: wipe all raw data from memory ────────────────────────────
+      useSearchStore.getState().cancelSearch();
+
       triggerSearchCompleteNotification(filters.company, filters.role, filters.country);
 
     } catch (err: any) {
-      console.error('Scraper fatal error:', err);
+      logger.error('Scraper', 'Fatal error', err);
       cleanupIntervals();
       useSearchStore.getState().setActivePhase('error');
     }
-  }, [domainScraper, aiModel, cleanupIntervals, triggerSearchCompleteNotification]);
+  }, [domainScraper, aiModel, cleanupIntervals, triggerSearchCompleteNotification, isCancelled]);
 
   return {
     runScrape,

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
 import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
 
-type Props = { positives: string[]; negatives: string[]; };
+type Props = { positives: string[]; negatives: string[] };
 
 export function ProsConsCard({ positives, negatives }: Props) {
   const { theme } = useAppStore();
@@ -14,12 +14,10 @@ export function ProsConsCard({ positives, negatives }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-        <View style={styles.cardHeaderRow}>
-          <View style={[styles.headerIconPro, { backgroundColor: c.successLight }]}>
-            <Ionicons name="thumbs-up" size={16} color={c.success} />
-          </View>
-          <Text style={[styles.cardTitle, { color: c.success }]}>PROS</Text>
+      <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[styles.sectionHeader, { backgroundColor: c.successLight }]}>
+          <Ionicons name="thumbs-up" size={14} color={c.success} />
+          <Text style={[styles.sectionTitle, { color: c.success }]}>PROS</Text>
         </View>
         {positives.length > 0 ? positives.map((item, idx) => (
           <View key={`pro-${idx}`} style={styles.listItem}>
@@ -27,16 +25,14 @@ export function ProsConsCard({ positives, negatives }: Props) {
             <Text style={[styles.itemText, { color: c.text }]}>{item}</Text>
           </View>
         )) : (
-          <Text style={[styles.noData, { color: c.textMuted }]}>No positive themes could be determined.</Text>
+          <Text style={[styles.noData, { color: c.textMuted }]}>No positive themes found</Text>
         )}
       </View>
 
-      <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-        <View style={styles.cardHeaderRow}>
-          <View style={[styles.headerIconCon, { backgroundColor: c.dangerLight }]}>
-            <Ionicons name="thumbs-down" size={16} color={c.danger} />
-          </View>
-          <Text style={[styles.cardTitle, { color: c.danger }]}>CONS</Text>
+      <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+        <View style={[styles.sectionHeader, { backgroundColor: c.dangerLight }]}>
+          <Ionicons name="thumbs-down" size={14} color={c.danger} />
+          <Text style={[styles.sectionTitle, { color: c.danger }]}>CONS</Text>
         </View>
         {negatives.length > 0 ? negatives.map((item, idx) => (
           <View key={`con-${idx}`} style={styles.listItem}>
@@ -44,7 +40,7 @@ export function ProsConsCard({ positives, negatives }: Props) {
             <Text style={[styles.itemText, { color: c.text }]}>{item}</Text>
           </View>
         )) : (
-          <Text style={[styles.noData, { color: c.textMuted }]}>No negative themes could be determined.</Text>
+          <Text style={[styles.noData, { color: c.textMuted }]}>No negative themes found</Text>
         )}
       </View>
     </View>
@@ -52,36 +48,16 @@ export function ProsConsCard({ positives, negatives }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { marginBottom: Spacing.lg },
-  card: {
-    borderRadius: Radius.xxl,
-    padding: Spacing.xl,
-    marginVertical: Spacing.xs,
-    borderWidth: 1,
+  container: { marginBottom: Spacing.lg, gap: Spacing.md },
+  card: { borderRadius: Radius.xl, padding: Spacing.lg, borderWidth: 1 },
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs + 2,
+    borderRadius: Radius.sm, alignSelf: 'flex-start', marginBottom: Spacing.md,
   },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  headerIconPro: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerIconCon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: { fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
-  listItem: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 5, paddingRight: Spacing.sm, gap: Spacing.sm },
-  bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 8 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  listItem: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 4, gap: Spacing.sm },
+  bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7 },
   itemText: { fontSize: 14, lineHeight: 20, flex: 1 },
-  noData: { paddingVertical: Spacing.xs, fontSize: 13 },
+  noData: { paddingVertical: Spacing.xs, fontSize: 13, fontStyle: 'italic' },
 });
