@@ -169,18 +169,31 @@ export function useScraper() {
 
       if (aiAvailable) {
         logger.phase('ai-extract', 'Running SLM extraction on all pages');
+        useSearchStore.getState().setActivePhase('ai-extract');
         const rawTexts = successPoints.map(p => p.rawText);
-        const slmResults = await aiModel.extractFromPages(rawTexts, filters);
-        if (slmResults) {
-          finalResults = { ...slmResults, timeElapsedSeconds: elapsedSeconds };
+        const slmResult = await aiModel.extractFromPages(rawTexts, filters);
+        if (slmResult) {
+          finalResults = {
+            ...slmResult.results,
+            timeElapsedSeconds: elapsedSeconds,
+            rawUrls: discoveredUrls,
+            aiPrompt: slmResult.rawPrompt,
+            aiRawResponse: slmResult.rawResponse,
+          };
           logger.info('Scraper', 'SLM extraction successful');
         } else {
           logger.warn('Scraper', 'SLM failed — falling back to Summary Engine');
-          finalResults = mergeAllResults(filters, rawDataPoints, elapsedSeconds);
+          finalResults = {
+            ...mergeAllResults(filters, rawDataPoints, elapsedSeconds),
+            rawUrls: discoveredUrls,
+          };
         }
       } else {
         logger.phase('summary', 'No AI model — using deterministic Summary Engine');
-        finalResults = mergeAllResults(filters, rawDataPoints, elapsedSeconds);
+        finalResults = {
+          ...mergeAllResults(filters, rawDataPoints, elapsedSeconds),
+          rawUrls: discoveredUrls,
+        };
       }
 
       useSearchStore.getState().setActiveProgress(96);
@@ -188,9 +201,21 @@ export function useScraper() {
       // ── Phase 4: AI Enhancement (optional summary) ────────────────────────
       if (aiAvailable) {
         logger.phase('ai-enhance', 'Running AI enhancement summary');
+        useSearchStore.getState().setActivePhase('ai-enhance');
         try {
-          const enhanced = await aiModel.runEnhancement(finalResults, filters);
-          if (enhanced) finalResults = { ...finalResults, aiEnhancedSummary: enhanced };
+          const enhResult = await aiModel.runEnhancement(finalResults, filters);
+          if (enhResult) {
+            finalResults = {
+              ...finalResults,
+              aiEnhancedSummary: enhResult.text,
+              aiPrompt: finalResults.aiPrompt
+                ? `${finalResults.aiPrompt}\n\n--- ENHANCEMENT PROMPT ---\n\n${enhResult.rawPrompt}`
+                : enhResult.rawPrompt,
+              aiRawResponse: finalResults.aiRawResponse
+                ? `${finalResults.aiRawResponse}\n\n--- ENHANCEMENT RESPONSE ---\n\n${enhResult.rawResponse}`
+                : enhResult.rawResponse,
+            };
+          }
         } catch (err) {
           logger.aiEnhance(`failed: ${err}`);
         }

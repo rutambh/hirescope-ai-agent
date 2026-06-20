@@ -141,6 +141,13 @@ export default function SearchScreen() {
                 disabled={!stateName}
                 onSelect={(dt) => { setDistrictName(dt === 'Clear Selection' ? '' : dt); }}
               />
+
+              <View style={styles.warningBox}>
+                <Ionicons name="information-circle-outline" size={14} color={c.warning} />
+                <Text style={[styles.warningText, { color: c.warning }]}>
+                  If you select State and city filters, it might give you wrong results due to limited search
+                </Text>
+              </View>
             </View>
 
             <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
@@ -266,6 +273,8 @@ const styles = StyleSheet.create({
   inputLabel: { fontSize: 12, fontWeight: '600', marginBottom: Spacing.xs },
   inputShell: { borderRadius: Radius.md, borderWidth: 1, paddingHorizontal: Spacing.lg, paddingVertical: Platform.OS === 'ios' ? 12 : 10, flexDirection: 'row', alignItems: 'center' },
   input: { flex: 1, fontSize: 15, fontWeight: '500', padding: 0 },
+  warningBox: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginTop: Spacing.sm, paddingHorizontal: Spacing.xs },
+  warningText: { fontSize: 11, flex: 1, lineHeight: 15 },
   actionBtn: { borderRadius: Radius.md, paddingVertical: Spacing.md + 2, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
   actionBtnText: { fontSize: 15, fontWeight: '700' },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.xxl, gap: Spacing.xs },

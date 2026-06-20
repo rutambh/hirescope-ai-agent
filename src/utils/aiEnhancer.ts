@@ -136,22 +136,66 @@ export function parseExtractionJson(text: string): {
   snippets: string[];
 } | null {
   try {
-    // Find JSON in the response (handle cases where model adds preamble)
-    const jsonStart = text.indexOf('{');
-    const jsonEnd = text.lastIndexOf('}');
-    if (jsonStart === -1 || jsonEnd === -1) return null;
-    const json = text.substring(jsonStart, jsonEnd + 1);
-    const parsed = JSON.parse(json);
+    // Strip markdown code fences if present
+    let cleaned = text
+      .replace(/```(?:json)?\s*/gi, '')
+      .replace(/\s*```/g, '')
+      .trim();
 
-    return {
-      rating: typeof parsed.rating === 'number' && parsed.rating >= 1 && parsed.rating <= 5 ? parsed.rating : null,
-      salaryMin: typeof parsed.salaryMin === 'number' && parsed.salaryMin > 0 ? parsed.salaryMin : null,
-      salaryMax: typeof parsed.salaryMax === 'number' && parsed.salaryMax > 0 ? parsed.salaryMax : null,
-      pros: Array.isArray(parsed.pros) ? parsed.pros.filter((p: any) => typeof p === 'string' && p.length > 3) : [],
-      cons: Array.isArray(parsed.cons) ? parsed.cons.filter((c: any) => typeof c === 'string' && c.length > 3) : [],
-      snippets: Array.isArray(parsed.snippets) ? parsed.snippets.filter((s: any) => typeof s === 'string' && s.length > 10) : [],
-    };
+    // Find JSON boundaries
+    const jsonStart = cleaned.indexOf('{');
+    const jsonEnd = cleaned.lastIndexOf('}');
+    if (jsonStart === -1 || jsonEnd === -1) return null;
+    cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+
+    // Try strict parse first
+    try {
+      const parsed = JSON.parse(cleaned);
+      return normalizeExtraction(parsed);
+    } catch {
+      // Fallback: fix common issues and retry
+      let fixed = cleaned
+        // Trailing commas
+        .replace(/,\s*}/g, '}')
+        .replace(/,\s*]/g, ']')
+        // Single-quoted keys/values -> double-quoted
+        .replace(/'/g, '"')
+        // Unquoted keys
+        .replace(/(\{|,)\s*(\w+)\s*:/g, '$1"$2":')
+        // Truncated JSON — close open arrays/objects
+        .replace(/([^"[\]{}]+)$/, '');
+
+      // Try to close incomplete JSON
+      let depth = 0;
+      for (const ch of fixed) {
+        if (ch === '{' || ch === '[') depth++;
+        if (ch === '}' || ch === ']') depth--;
+      }
+      while (depth > 0) { fixed += '}'; depth--; }
+      if (depth < 0) fixed = fixed.slice(0, fixed.lastIndexOf('}') + 1);
+
+      const parsed = JSON.parse(fixed);
+      return normalizeExtraction(parsed);
+    }
   } catch {
     return null;
   }
+}
+
+function normalizeExtraction(parsed: any): {
+  rating: number | null;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  pros: string[];
+  cons: string[];
+  snippets: string[];
+} {
+  return {
+    rating: typeof parsed.rating === 'number' && parsed.rating >= 1 && parsed.rating <= 5 ? parsed.rating : null,
+    salaryMin: typeof parsed.salaryMin === 'number' && parsed.salaryMin > 0 ? parsed.salaryMin : null,
+    salaryMax: typeof parsed.salaryMax === 'number' && parsed.salaryMax > 0 ? parsed.salaryMax : null,
+    pros: Array.isArray(parsed.pros) ? parsed.pros.filter((p: any) => typeof p === 'string' && p.length > 3) : [],
+    cons: Array.isArray(parsed.cons) ? parsed.cons.filter((c: any) => typeof c === 'string' && c.length > 3) : [],
+    snippets: Array.isArray(parsed.snippets) ? parsed.snippets.filter((s: any) => typeof s === 'string' && s.length > 10) : [],
+  };
 }

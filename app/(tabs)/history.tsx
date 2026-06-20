@@ -29,7 +29,7 @@ export default function HistoryScreen() {
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
   const c = isDark ? DarkColors : LightColors;
 
-  const isResearching = phase === 'searching' || phase === 'extracting';
+  const isResearching = phase === 'searching' || phase === 'extracting' || phase === 'ai-extract' || phase === 'ai-enhance';
 
   const handleViewResults = (record: SearchRecord) => {
     searchStore.setFilters(record.filters);
@@ -67,6 +67,8 @@ export default function HistoryScreen() {
     const elapsedMinutes = (totalSecs - estimatedSecondsRemaining) / 60;
     if (phase === 'searching') return 'Scanning the web...';
     if (phase === 'extracting') return `Extracting data... ${Math.round(elapsedMinutes)}/${Math.round(totalSecs / 60)}m`;
+    if (phase === 'ai-extract') return 'AI analyzing pages...';
+    if (phase === 'ai-enhance') return 'AI writing summary...';
     if (estimatedSecondsRemaining > 720) return '~12 min remaining';
     if (estimatedSecondsRemaining > 540) return '~9 min remaining';
     if (estimatedSecondsRemaining > 360) return '~6 min remaining';
@@ -112,6 +114,14 @@ export default function HistoryScreen() {
             </Text>
             <ProgressBar progress={progressPercent} />
             <Text style={[styles.progressTime, { color: c.textMuted }]}>{getEstimatedTimeText()}</Text>
+            <TouchableOpacity
+              style={[styles.liveDetailBtn, { backgroundColor: c.primaryLight, borderColor: c.primary + '30' }]}
+              onPress={() => (router as any).push('/research-details')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="analytics-outline" size={14} color={c.primary} />
+              <Text style={[styles.liveDetailText, { color: c.primary }]}>View Details</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -165,6 +175,11 @@ const styles = StyleSheet.create({
   progressLoc: { fontSize: 11, fontWeight: '600', marginBottom: Spacing.sm },
   progressTime: { fontSize: 11, marginTop: Spacing.sm },
   stopBtn: { width: 34, height: 34, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  liveDetailBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.xs,
+    borderRadius: Radius.md, paddingVertical: Spacing.sm, marginTop: Spacing.md, borderWidth: 1,
+  },
+  liveDetailText: { fontSize: 12, fontWeight: '700' },
   list: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.massive, paddingTop: Spacing.xs },
   empty: { alignItems: 'center', justifyContent: 'center', marginTop: 80, paddingHorizontal: Spacing.huge },
   emptyIcon: { width: 64, height: 64, borderRadius: Radius.xl, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.xl },

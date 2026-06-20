@@ -40,8 +40,8 @@ export const APP_CONFIG = {
   // ─── Timeouts ─────────────────────────────────────────────────────────────
   perDomainTimeoutMs: 30000,        // 30s per page (generous for dynamic content)
   urlDiscoveryTimeoutMs: 30000,     // 30s per search query (lets engines fully render)
-  totalTimeoutMs: 15 * 60000,       // 15 minutes total — no rush, precision matters
-  aiInferenceTimeoutMs: 60000,      // 60s for on-device model (larger context)
+  totalTimeoutMs: 30 * 60000,       // 30 minutes total — thorough research
+  aiInferenceTimeoutMs: 30 * 60000, // match total timeout; AI gets as long as it needs
 
   // ─── AI Model (Optional On-Device Enhancement) ────────────────────────────
   // Update modelDownloadUrl after uploading to your host

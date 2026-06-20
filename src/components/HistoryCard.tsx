@@ -99,7 +99,7 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
         </View>
         <View style={[styles.statDivider, { backgroundColor: c.border }]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: c.textMuted }]}>Hike</Text>
+              <Text style={[styles.statLabel, { color: c.textMuted }]}>Highest Hike</Text>
           <Text style={[styles.statValue, { color: c.success }]}>{avgHike !== null ? `+${avgHike}%` : '—'}</Text>
         </View>
       </View>

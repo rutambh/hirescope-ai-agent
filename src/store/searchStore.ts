@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { SearchFilters, RawDataPoint, FinalResults } from '../types';
 
-type SearchPhase = 'idle' | 'searching' | 'extracting' | 'complete' | 'error';
+type SearchPhase = 'idle' | 'searching' | 'extracting' | 'ai-extract' | 'ai-enhance' | 'complete' | 'error';
 
 type SearchState = {
   // Viewer state (for displaying results on the results screen)

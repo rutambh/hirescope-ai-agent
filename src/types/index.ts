@@ -55,6 +55,10 @@ export type FinalResults = {
   confidence: 'high' | 'medium' | 'low' | 'minimal';
   timeElapsedSeconds: number;
   aiEnhancedSummary?: string;  // optional — set if on-device model ran
+  // Research detail logging (for the View Details screen)
+  rawUrls?: string[];          // URLs that were scraped
+  aiPrompt?: string;           // full prompt sent to the AI model
+  aiRawResponse?: string;      // raw text returned by the AI model
 };
 
 export type SearchRecord = {

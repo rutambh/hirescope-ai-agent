@@ -9,6 +9,18 @@ import { BackgroundScraper } from '../src/components/BackgroundScraper';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// Suppress known benign crash from whatwg-fetch polyfill (RangeError: status 0)
+if (global.ErrorUtils) {
+  const origHandler = global.ErrorUtils.getGlobalHandler();
+  global.ErrorUtils.setGlobalHandler((error, isFatal) => {
+    if (error?.message?.includes("Failed to construct 'Response'")) {
+      console.warn('[HireScope] Suppressed whatwg-fetch polyfill error:', error.message);
+      return;
+    }
+    origHandler(error, isFatal);
+  });
+}
+
 export default function RootLayout() {
   useNotification();
   const theme = useAppStore((state) => state.theme);

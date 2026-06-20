@@ -170,7 +170,7 @@ export function useAIModel() {
   const extractFromPages = useCallback(async (
     rawTexts: string[],
     filters: SearchFilters
-  ): Promise<FinalResults | null> => {
+  ): Promise<{ results: FinalResults; rawPrompt: string; rawResponse: string } | null> => {
     if (store.status !== 'installed') return null;
     if (!llamaModule) return null;
     if (rawTexts.length === 0) return null;
@@ -182,19 +182,36 @@ export function useAIModel() {
 
       const result = await ctx.completion({
         prompt,
-        n_predict: 800,
+        n_predict: 2048,
         temperature: 0.1,
         top_p: 0.9,
         stop: ['\n\n\n'],
       });
 
       const text = (result as any)?.text?.trim();
-      if (!text || text.length < 10) return null;
+      const rawResponse = text || '';
+
+      if (!text || text.length < 10) {
+        logger.warn('AI Extraction', 'Model returned empty or too-short response');
+        return null;
+      }
 
       const extracted = parseExtractionJson(text);
       if (!extracted) {
-        logger.warn('AI Extraction', 'Failed to parse JSON from model output');
-        return null;
+        logger.warn('AI Extraction', 'Failed to parse JSON from model output — returning raw response for debugging');
+        // Return partial data so the details view can show what the model actually said
+        return {
+          results: {
+            rating: null, salaryMin: null, salaryMax: null,
+            hikeMinPercent: null, hikeMaxPercent: null,
+            positives: [], negatives: [],
+            sourcesCount: 0, domainsScraped: rawTexts.length,
+            confidence: 'minimal', timeElapsedSeconds: 0,
+            aiPrompt: prompt, aiRawResponse: rawResponse,
+          },
+          rawPrompt: prompt,
+          rawResponse,
+        };
       }
 
       logger.info('AI Extraction', `Extracted: rating=${extracted.rating}, salary=${extracted.salaryMin}-${extracted.salaryMax}, pros=${extracted.pros.length}, cons=${extracted.cons.length}`);
@@ -213,17 +230,23 @@ export function useAIModel() {
         sourceCount >= 15 ? 'high' : sourceCount >= 8 ? 'medium' : sourceCount >= 3 ? 'low' : 'minimal';
 
       return {
-        rating: extracted.rating,
-        salaryMin: extracted.salaryMin,
-        salaryMax: extracted.salaryMax,
-        hikeMinPercent: hikeMin,
-        hikeMaxPercent: hikeMax,
-        positives: extracted.pros.slice(0, 10),
-        negatives: extracted.cons.slice(0, 10),
-        sourcesCount: sourceCount,
-        domainsScraped: rawTexts.length,
-        confidence,
-        timeElapsedSeconds: 0,
+        results: {
+          rating: extracted.rating,
+          salaryMin: extracted.salaryMin,
+          salaryMax: extracted.salaryMax,
+          hikeMinPercent: hikeMin,
+          hikeMaxPercent: hikeMax,
+          positives: extracted.pros.slice(0, 10),
+          negatives: extracted.cons.slice(0, 10),
+          sourcesCount: sourceCount,
+          domainsScraped: rawTexts.length,
+          confidence,
+          timeElapsedSeconds: 0,
+          aiPrompt: prompt,
+          aiRawResponse: rawResponse,
+        },
+        rawPrompt: prompt,
+        rawResponse,
       };
     } catch (err: any) {
       logger.warn('AI Extraction', `Failed: ${err?.message}`);
@@ -240,7 +263,7 @@ export function useAIModel() {
   const runEnhancement = useCallback(async (
     results: FinalResults,
     filters: SearchFilters
-  ): Promise<string | null> => {
+  ): Promise<{ text: string; rawPrompt: string; rawResponse: string } | null> => {
     if (store.status !== 'installed') return null;
     if (!llamaModule) return null;
 
@@ -249,21 +272,22 @@ export function useAIModel() {
       const input = buildEnhancementInput(results, filters);
       const prompt = buildEnhancementPrompt(input);
 
-      const inferencePromise = ctx.completion({
+      const inferenceResult = await ctx.completion({
         prompt,
-        n_predict: 300,
+        n_predict: 512,
         temperature: 0.2,
         top_p: 0.85,
         stop: ['\n\n', 'Data:', 'Company:', 'Location:'],
       });
 
-      const timeoutPromise = new Promise<null>((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout')), APP_CONFIG.aiInferenceTimeoutMs)
-      );
+      const text = (inferenceResult as any)?.text?.trim();
+      if (!text || text.length <= 10) return null;
 
-      const result = await Promise.race([inferencePromise, timeoutPromise]);
-      const text = (result as any)?.text?.trim();
-      return text && text.length > 10 ? text : null;
+      return {
+        text,
+        rawPrompt: prompt,
+        rawResponse: text,
+      };
     } catch (err: any) {
       logger.warn('AI Enhancement', `Failed: ${err?.message}`);
       if (inferenceContextRef.current) {

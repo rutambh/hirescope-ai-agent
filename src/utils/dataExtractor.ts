@@ -55,11 +55,9 @@ export function extractSalaries(
     // 8-15 LPA  |  8.5 to 14.2 Lakhs  |  12L–18L
     const lpaRange = /\b(\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)\s*(?:lakh|lpa|l|Lakh|LPA|L)\b/gi;
     // 12 LPA  (bare number + LPA)  |  12 Lakhs  |  12L (bare)
-    const lpaBare = /\b(\d+(?:\.\d+)?)\s*(?:lakh|lpa|lakhs|lpa|l)\b/gi;
+    const lpaBare = /\b(\d+(?:\.\d+)?)\s*(?:lakh|lpa|lakhs)\b/gi;
     // ₹12,00,000  |  12,00,000 (Indian numeric format)
     const indianNumeric = /(?:Rs\.?|INR|₹|inr)?\s*(\d{1,2}),(\d{2}),(\d{3})\b/gi;
-    // ₹1200000  |  1200000 (plain 6-7 digit number)
-    const plainLakh = /\b(\d{6,7})\b/g;
 
     let m: RegExpExecArray | null;
 
@@ -89,11 +87,6 @@ export function extractSalaries(
       if (!isNaN(lakh) && lakh > 0 && lakh < 300) values.push(lakh);
     }
 
-    const r5 = new RegExp(plainLakh.source, plainLakh.flags);
-    while ((m = r5.exec(clean)) !== null) {
-      const lakh = parseFloat(m[1]) / 100000;
-      if (!isNaN(lakh) && lakh > 0 && lakh < 300) values.push(lakh);
-    }
   } else if (salaryFormat === 'per year') {
     // $80,000  |  £65,000  |  €75,000  |  $80,000 - $150,000
     const yearly = /(?:\$|£|€|CAD|C\$|A\$|USD|GBP|EUR)\s*(\d{2,3})[,\s](\d{3})\b/gi;

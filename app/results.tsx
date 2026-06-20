@@ -97,6 +97,23 @@ export default function ResultsScreen() {
           <SalaryCard results={finalResults} filters={filters} country={country as any} />
           <ProsConsCard positives={finalResults.positives} negatives={finalResults.negatives} />
           <ConfidenceCard results={finalResults} />
+
+          <TouchableOpacity
+            style={[styles.detailBtn, { backgroundColor: c.card, borderColor: c.primary + '30' }]}
+            onPress={() => (router as any).push('/research-details')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.detailBtnIcon, { backgroundColor: c.primaryLight }]}>
+              <Ionicons name="analytics-outline" size={18} color={c.primary} />
+            </View>
+            <View style={styles.detailBtnText}>
+              <Text style={[styles.detailBtnTitle, { color: c.text }]}>View Research Details</Text>
+              <Text style={[styles.detailBtnDesc, { color: c.textMuted }]}>
+                Pages scraped · AI prompts · Raw responses
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
+          </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -127,4 +144,12 @@ const styles = StyleSheet.create({
   noDataDesc: { fontSize: 14, textAlign: 'center', lineHeight: 21, marginBottom: Spacing.xxl },
   primaryBtn: { borderRadius: Radius.md, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xxl, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   primaryBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  detailBtn: {
+    flexDirection: 'row', alignItems: 'center', borderRadius: Radius.xl,
+    padding: Spacing.lg, borderWidth: 1, marginBottom: Spacing.lg, gap: Spacing.md,
+  },
+  detailBtnIcon: { width: 40, height: 40, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+  detailBtnText: { flex: 1 },
+  detailBtnTitle: { fontSize: 14, fontWeight: '600' },
+  detailBtnDesc: { fontSize: 11, marginTop: 1 },
 });
