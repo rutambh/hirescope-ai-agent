@@ -18,8 +18,9 @@ export const useHistoryStore = create<HistoryStore>()(
       searches: [],
 
       addSearch: (record) => set((state) => {
+        const currentSearches = Array.isArray(state.searches) ? state.searches : [];
         // Filter out duplicate if it somehow exists
-        const filtered = state.searches.filter((s) => s.id !== record.id);
+        const filtered = currentSearches.filter((s) => s.id !== record.id);
         
         // Add new to beginning of history list (most recent first)
         const updated = [record, ...filtered];
@@ -29,6 +30,7 @@ export const useHistoryStore = create<HistoryStore>()(
           updated.pop();
         }
         
+        console.log('useHistoryStore: addSearch called. New record ID:', record.id, 'Total searches now:', updated.length);
         return { searches: updated };
       }),
 
@@ -41,6 +43,16 @@ export const useHistoryStore = create<HistoryStore>()(
     {
       name: 'hirescope-history-store',
       storage: createJSONStorage(() => AsyncStorage),
+      onRehydrateStorage: (state) => {
+        console.log('useHistoryStore: hydration starting');
+        return (state, error) => {
+          if (error) {
+            console.error('useHistoryStore: hydration failed', error);
+          } else {
+            console.log('useHistoryStore: hydration complete. Loaded searches count:', state?.searches?.length || 0);
+          }
+        };
+      }
     }
   )
 );

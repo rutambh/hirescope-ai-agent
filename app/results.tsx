@@ -10,6 +10,7 @@ import { getCountryByName } from '../src/constants/countries';
 import { useAppStore } from '../src/store/appStore';
 import { formatSalary } from '../src/utils/currency';
 import { LightColors, DarkColors, Spacing, Radius } from '../src/constants/theme';
+import { ConfidenceCard } from '../src/components/ConfidenceCard';
 
 export default function ResultsScreen() {
   const router = useRouter();
@@ -102,7 +103,8 @@ export default function ResultsScreen() {
             </View>
           </View>
 
-
+          {/* Data Confidence & AI Summary */}
+          <ConfidenceCard results={finalResults} />
 
           {/* Estimated Median Salary Card */}
           <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card, borderColor: isDark ? c.border : 'rgba(0, 0, 0, 0.05)' }]}>

@@ -28,6 +28,8 @@ export default function HistoryScreen() {
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
   const c = isDark ? DarkColors : LightColors;
 
+  console.log('HistoryScreen: rendering. Searches count from store:', searches?.length);
+
   const isResearching = phase === 'searching' || phase === 'extracting' || phase === 'ai-extract' || phase === 'ai-enhance';
 
   const handleViewResults = (record: SearchRecord) => {

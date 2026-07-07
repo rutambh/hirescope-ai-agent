@@ -233,6 +233,7 @@ export function useScraper() {
         filters,
         results: finalResults,
       };
+      console.log('useScraper: Scraping complete. Saving search record to history store for:', filters.company, '-', filters.role);
       useHistoryStore.getState().addSearch(record);
 
       // ── Cleanup: wipe all raw data from memory ────────────────────────────

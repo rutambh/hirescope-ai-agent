@@ -36,3 +36,21 @@ Append-only log. Never rewrite or delete old entries.
 #### Decision: GitHub Actions CI/CD with direct Gradle builds (no EAS)
 **Why**: $0 cost — GitHub Actions free tier (2000 min/month) is sufficient. EAS cloud builds cost money and have queue delays. The pipeline uses `expo prebuild` + `gradlew bundleRelease` + `r0adkll/upload-google-play` for automated Play Store submission.
 **Alternatives considered**: EAS Build (rejected — subscription cost), local-only builds (rejected — no automation).
+
+---
+
+### 2026-07-07 — Re-enabling AI settings, restart triggers, and Results Confidence rendering
+
+#### Decision: Rendering ConfidenceCard on the Results screen
+**Why**: The results page displayed the heuristic metrics but lacked the high-level metadata (domains scraped, elapsed time) and optional on-device AI natural summaries. Rendering `ConfidenceCard` directly on the Results screen bridges this display gap.
+
+#### Decision: DevSettings-based reloading for local model activation
+**Why**: Once the 350 MB GGUF model completes download and integrity checks, the on-device inference context needs to be initialized. Standard React Native `DevSettings.reload()` provides a safe reload mechanism for development builds without introducing additional native update libraries.
+
+#### Decision: Diagnostics logging for AsyncStorage History Store
+**Why**: Hydration timing and AsyncStorage serialization are difficult to trace silently in local-only environments. Injecting hydration logs (`onRehydrateStorage`) and transaction hooks lets developers trace reads/writes reactively.
+
+#### Decision: Settings screen cleanup (Removing Logout/Donate, adding native Sharing)
+**Why**: The application operates in a completely serverless, zero-login context, making a "Logout" button obsolete and confusing for users. The "Donate" section was removed to clean up visual space on Settings. Additionally, replaced simple URL opening with native React Native `Share` capabilities to allow users to share the app with a friendly summary message alongside the Play Store URL.
+
+

@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking,
-  Platform, Alert, Modal, useColorScheme, PanResponder, Switch
+  Platform, Alert, Modal, useColorScheme, PanResponder, Switch, DevSettings, Share
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -31,7 +31,31 @@ export default function SettingsScreen() {
   const aiModel = useAIModel();
   const [downloadConfirmVisible, setDownloadConfirmVisible] = useState(false);
 
+  const prevStatusRef = useRef(aiModel.status);
 
+  useEffect(() => {
+    if (prevStatusRef.current !== 'installed' && aiModel.status === 'installed') {
+      Alert.alert(
+        'AI Model Downloaded',
+        'Restart the app now to enable AI summaries?',
+        [
+          {
+            text: 'Later',
+            style: 'cancel',
+          },
+          {
+            text: 'Restart',
+            onPress: () => {
+              if (Platform.OS === 'android' || Platform.OS === 'ios') {
+                DevSettings.reload();
+              }
+            },
+          },
+        ]
+      );
+    }
+    prevStatusRef.current = aiModel.status;
+  }, [aiModel.status]);
 
   // Highlights color selections
   const [selectedHighlight, setSelectedHighlight] = useState('indigo');
@@ -98,15 +122,14 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const handleShare = () => {
-    Linking.openURL(`https://play.google.com/store/apps/details?id=${APP_CONFIG.packageName}`);
-  };
-
-  const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to log out from HireScope?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => router.replace('/(tabs)') },
-    ]);
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: 'Check out HireScope! Get consolidated salary ranges, employee ratings, and reviews locally and privately: https://play.google.com/store/apps/details?id=com.rutambh.hirescope',
+      });
+    } catch (err: any) {
+      Alert.alert('Share Failed', err.message);
+    }
   };
 
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
@@ -395,41 +418,22 @@ export default function SettingsScreen() {
               <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.linkRow, { borderBottomColor: C.border }]} onPress={handleShare}>
+            <TouchableOpacity style={[styles.linkRow, { borderBottomWidth: 0 }]} onPress={handleShare}>
               <View style={[styles.linkIcon, { backgroundColor: C.primaryLight }]}>
                 <Ionicons name="share-outline" size={16} color={C.primary} />
               </View>
               <Text style={[styles.linkLabel, { color: C.text }]}>Share App</Text>
               <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
             </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.linkRow, { borderBottomWidth: 0 }]} onPress={handleCopyUPI}>
-              <View style={[styles.linkIcon, { backgroundColor: C.warningLight }]}>
-                <Ionicons name="heart-outline" size={16} color={C.warning} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.linkLabel, { color: C.text }]}>Donate via UPI</Text>
-                <Text style={[styles.linkSub, { color: C.textMuted }]}>rutambh@upi</Text>
-              </View>
-              <TouchableOpacity style={[styles.copyBtn, { backgroundColor: C.primary }]} onPress={handleCopyUPI}>
-                <Text style={styles.copyBtnText}>Copy</Text>
-              </TouchableOpacity>
-            </TouchableOpacity>
           </View>
 
-          {/* Logout Action Area */}
-          <View style={styles.logoutWrap}>
-            <TouchableOpacity style={[styles.logoutBtn, { borderColor: C.danger }]} onPress={handleLogout}>
-              <Ionicons name="log-out-outline" size={18} color={C.danger} />
-              <Text style={[styles.logoutBtnText, { color: C.danger }]}>Logout from HireScope</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Removed Logout Action Area */}
 
         </ScrollView>
 
         <Modal visible={downloadConfirmVisible} transparent animationType="fade" onRequestClose={() => setDownloadConfirmVisible(false)}>
           <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setDownloadConfirmVisible(false)}>
-            <View style={[styles.confirmModal, { backgroundColor: C.card, borderColor: C.border }]}>
+            <View style={[styles.confirmModal, { backgroundColor: C.surface, borderColor: C.border }]}>
               <View style={[styles.confirmIcon, { backgroundColor: C.primaryLight }]}>
                 <Ionicons name="sparkles" size={26} color={C.primary} />
               </View>
@@ -450,7 +454,7 @@ export default function SettingsScreen() {
                   <Text style={[styles.smallBtnText, { color: C.text }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: C.primary }]} onPress={handleStartDownload}>
-                  <Text style={styles.primaryBtnText}>Download</Text>
+                  <Text style={[styles.primaryBtnText, { color: isDark ? '#051424' : '#FFF' }]}>Download</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -664,7 +668,7 @@ const styles = StyleSheet.create({
   linkSub: { fontSize: 11, marginTop: 1 },
   copyBtn: { paddingHorizontal: Spacing.md, paddingVertical: 5, borderRadius: Radius.full },
   copyBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'center', alignItems: 'center' },
   confirmModal: { borderRadius: 20, borderWidth: 1, width: '86%', padding: Spacing.xl },
   confirmIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: Spacing.md },
   confirmTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: Spacing.lg },
