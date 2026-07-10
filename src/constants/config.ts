@@ -16,23 +16,25 @@ export const APP_CONFIG = {
   // Five targeted categories for maximum coverage
   searchQueryTemplates: [
     // ── Category 1: Reviews → extracts Pros & Cons ──
-    '{company} {country} {role} Reviews',
-    '{company} {country} {role} employee reviews pros cons',
     '{company} {role} reviews {country}',
+    '{company} {role} employee reviews pros cons {country}',
+    '{company} {role} working culture reviews {country}',
     // ── Category 2: Ratings → extracts star ratings ──
-    '{company} {country} {role} Ratings',
-    '{company} {country} {role} employee rating',
-    '{company} {role} rating {country}',
+    '{company} {role} ratings {country}',
+    '{company} {role} employee rating {country}',
+    '{company} {role} overall rating {country}',
     // ── Category 3: Salary → extracts salary range ──
-    '{company} {country} {role} Salary',
-    '{company} {country} {role} compensation pay',
-    '{company} {role} salary range {country}',
+    '{company} {role} {experience} salary {country}',
+    '{company} {role} {experience} compensation pay {country}',
+    '{company} {role} {experience} salary range {country}',
     // ── Category 4: Glassdoor/AmbitionBox specific ──
-    'site:glassdoor.com {company} {role} salary {country}',
-    'site:ambitionbox.com {company} {role} reviews',
+    'site:glassdoor.com {company} {role} {experience} salary {country}',
+    'site:ambitionbox.com {company} {role} {experience} reviews',
     // ── Category 5: General employment data ──
-    '{company} {role} hiring {country} salary package',
-    '{company} {role} CTC {country} experience',
+    '{company} {role} {experience} hiring salary package {country}',
+    '{company} {role} CTC {experience} experience {country}',
+    '{company} {role} {experience} years experience salary {country}',
+    '{company} {role} {experience} yrs salary {country}',
   ] as string[],
 
   // Search engine endpoints
@@ -47,8 +49,8 @@ export const APP_CONFIG = {
   // ─── Timeouts ─────────────────────────────────────────────────────────────
   perDomainTimeoutMs: 30000,        // 30s per page (generous for dynamic content)
   urlDiscoveryTimeoutMs: 30000,     // 30s per search query (lets engines fully render)
-  totalTimeoutMs: 30 * 60000,       // 30 minutes total — thorough research
-  aiInferenceTimeoutMs: 30 * 60000, // match total timeout; AI gets as long as it needs
+  totalTimeoutMs: 10 * 60000,       // 10 minutes total — thorough research
+  aiInferenceTimeoutMs: 10 * 60000, // 10 minutes total for AI inference
 
   // ─── AI Model (Optional On-Device Enhancement) ────────────────────────────
   // Qwen2.5-0.5B-Instruct (q4_k_m) — ~300MB, fast on mobile, good for extraction

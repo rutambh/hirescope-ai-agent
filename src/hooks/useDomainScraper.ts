@@ -1,22 +1,122 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import { APP_CONFIG } from '../constants/config';
 import { useAppStore } from '../store/appStore';
 import { logger } from '../utils/logger';
 
+export interface WebViewRequest {
+  url: string;
+  action: 'discover' | 'scrape';
+  resolve: (result: any) => void;
+  reject: (err: any) => void;
+}
+
 // Module-level abort controller — shared across all instances
 let globalAbortController: AbortController | null = null;
+
+let activeWebViewRequest: WebViewRequest | null = null;
+const listeners = new Set<() => void>();
+
+export function registerWebViewListener(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function notifyListeners() {
+  listeners.forEach(l => l());
+}
+
+export function useActiveWebViewRequest() {
+  const [request, setRequest] = useState<WebViewRequest | null>(activeWebViewRequest);
+
+  useEffect(() => {
+    return registerWebViewListener(() => {
+      setRequest(activeWebViewRequest);
+    });
+  }, []);
+
+  return request;
+}
+
+export function resolveActiveWebViewRequest(result: any) {
+  if (activeWebViewRequest) {
+    activeWebViewRequest.resolve(result);
+    activeWebViewRequest = null;
+    notifyListeners();
+  }
+}
+
+export function rejectActiveWebViewRequest(err: any) {
+  if (activeWebViewRequest) {
+    activeWebViewRequest.reject(err);
+    activeWebViewRequest = null;
+    notifyListeners();
+  }
+}
+
+async function requestViaWebView(
+  url: string,
+  action: 'discover' | 'scrape',
+  timeoutMs: number
+): Promise<any> {
+  if (globalAbortController?.signal.aborted) {
+    throw new Error('Cancelled');
+  }
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('WebView timeout'));
+    }, timeoutMs);
+
+    // Cancel any previous pending request
+    if (activeWebViewRequest) {
+      activeWebViewRequest.reject(new Error('Cancelled by new request'));
+    }
+
+    activeWebViewRequest = {
+      url,
+      action,
+      resolve: (val) => {
+        clearTimeout(timer);
+        resolve(val);
+      },
+      reject: (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    };
+    notifyListeners();
+  });
+}
 
 export function cancelAllFetches() {
   if (globalAbortController) {
     globalAbortController.abort();
     globalAbortController = null;
   }
+  rejectActiveWebViewRequest(new Error('Cancelled'));
 }
 
 // ─── HTML → Plain Text ─────────────────────────────────────────────────────────
 
 function htmlToText(html: string): string {
-  return html
+  // Extract JSON-LD script blocks first
+  const jsonLdBlocks: string[] = [];
+  const jsonLdRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let jsonMatch: RegExpExecArray | null;
+  while ((jsonMatch = jsonLdRegex.exec(html)) !== null) {
+    const blockText = jsonMatch[1].trim();
+    if (blockText && (
+      blockText.includes('salary') || blockText.includes('Salary') ||
+      blockText.includes('compensation') || blockText.includes('Compensation') ||
+      blockText.includes('baseSalary') || blockText.includes('BaseSalary')
+    )) {
+      jsonLdBlocks.push(blockText);
+    }
+  }
+
+  const plainText = html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
     .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, ' ')
@@ -42,6 +142,11 @@ function htmlToText(html: string): string {
     .replace(/&[a-zA-Z]+;/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+  if (jsonLdBlocks.length > 0) {
+    return `${plainText}\n\n=== JSON-LD START ===\n${jsonLdBlocks.join('\n')}\n=== JSON-LD END ===`;
+  }
+  return plainText;
 }
 
 // ─── Login-Wall & CAPTCHA Detection ─────────────────────────────────────────────
@@ -133,6 +238,9 @@ function scoreContentQuality(text: string): number {
   if (/\d+\s*(?:lpa|lakh|lakhs|k|K|\$|₹|€|£)/.test(text)) score += 2;
   if (/\b\d+(?:\.\d+)?\s*(?:\/\s*5|out\s+of\s+5)\b/i.test(text)) score += 2;
 
+  // Boost for JSON-LD structured blocks
+  if (text.includes('=== JSON-LD START ===')) score += 4;
+
   // Penalty for very short text
   if (text.length < 200) score -= 2;
 
@@ -172,12 +280,22 @@ function extractUrlsFromHtml(html: string): string[] {
 // ─── Search Query Builder ──────────────────────────────────────────────────────
 
 function buildSearchQuery(
-  company: string, role: string, country: string,
+  company: string, role: string, country: string, experience: number,
   template?: string
 ): string {
   const location = country;
   const tpl = template ?? '{company} {role} {country} salary reviews';
-  return tpl.replace('{company}', company).replace('{role}', role).replace('{country}', location);
+  let query = tpl
+    .replace('{company}', company)
+    .replace('{role}', role)
+    .replace('{country}', location);
+
+  if (experience > 0) {
+    query = query.replace('{experience}', `${experience} years`);
+  } else {
+    query = query.replace('{experience}', '');
+  }
+  return query.replace(/\s+/g, ' ').trim();
 }
 
 function searchUrl(engine: string, query: string): string {
@@ -306,55 +424,12 @@ function cleanAndFilterUrls(
   return results;
 }
 
-// ─── Fetch with Retry & Fallback ────────────────────────────────────────────────
-
-const USER_AGENTS = [
-  APP_CONFIG.webViewUserAgent,
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-];
-
-async function fetchWithTimeout(
-  url: string, timeoutMs: number, userAgentIndex = 0
-): Promise<string> {
-  if (!globalAbortController) {
-    globalAbortController = new AbortController();
-  }
-  const signal = globalAbortController.signal;
-
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Timeout')), timeoutMs)
-  );
-
-  const ua = USER_AGENTS[userAgentIndex % USER_AGENTS.length];
-
-  const fetchPromise = fetch(url, {
-    signal,
-    headers: {
-      'User-Agent': ua,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'none',
-    },
-  }).then(async res => {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.text();
-  });
-
-  return Promise.race([fetchPromise, timeoutPromise]);
-}
-
-// ─── Hook ──────────────────────────────────────────────────────────────────────
+// ─── WebView-based Scraping ───────────────────────────────────────────────────
 
 export function useDomainScraper() {
   const discoverUrls = useCallback(async (
-    company: string, role: string, country: string
+    company: string, role: string, country: string, experience: number,
+    deadlineTimestamp?: number
   ): Promise<string[]> => {
     const maxDomains = useAppStore.getState().maxDomainsToScrape;
     const allRawUrls: string[] = [];
@@ -363,24 +438,29 @@ export function useDomainScraper() {
 
     for (const template of templates) {
       if (allRawUrls.length >= maxDomains * 3) break;
-      const query = buildSearchQuery(company, role, country, template);
+      if (deadlineTimestamp && Date.now() >= deadlineTimestamp) {
+        logger.warn('Discovery', 'Deadline reached during URL discovery');
+        break;
+      }
+      const query = buildSearchQuery(company, role, country, experience, template);
 
       for (const engine of engines) {
         if (allRawUrls.length >= maxDomains * 3) break;
         if (globalAbortController?.signal.aborted) return [];
+        if (deadlineTimestamp && Date.now() >= deadlineTimestamp) {
+          logger.warn('Discovery', 'Deadline reached during URL discovery');
+          break;
+        }
 
         const url = searchUrl(engine, query);
         try {
-          logger.info('Discovery', `${engine} → "${query}"`);
-          const html = await fetchWithTimeout(url, APP_CONFIG.urlDiscoveryTimeoutMs);
-          const { isBlocked } = detectLoginWall(html);
-          if (isBlocked) {
-            logger.warn('Discovery', `${engine} returned blocked content, skipping`);
-            continue;
+          logger.info('Discovery', `WebView discovery ${engine} → "${query}"`);
+          const urls = await requestViaWebView(url, 'discover', APP_CONFIG.urlDiscoveryTimeoutMs);
+          if (globalAbortController?.signal.aborted) return [];
+          
+          if (urls && urls.length > 0) {
+            allRawUrls.push(...urls);
           }
-          const urls = extractUrlsFromHtml(html);
-          logger.urlsDiscovered(engine, urls.length, query);
-          allRawUrls.push(...urls);
 
           // Page 2 for more results
           if (allRawUrls.length < maxDomains * 2) {
@@ -390,13 +470,17 @@ export function useDomainScraper() {
               else if (engine === 'yahoo') page2 = `${url}&b=11`;
               else if (engine === 'startpage') page2 = `${url}&start=10`;
               if (page2) {
-                const html2 = await fetchWithTimeout(page2, APP_CONFIG.urlDiscoveryTimeoutMs);
-                allRawUrls.push(...extractUrlsFromHtml(html2));
+                const urls2 = await requestViaWebView(page2, 'discover', APP_CONFIG.urlDiscoveryTimeoutMs);
+                if (globalAbortController?.signal.aborted) return [];
+                if (urls2 && urls2.length > 0) {
+                  allRawUrls.push(...urls2);
+                }
               }
             } catch { /* pagination best-effort */ }
           }
-        } catch (err) {
-          logger.warn('Discovery', `${engine} failed:`, err);
+        } catch (err: any) {
+          if (globalAbortController?.signal.aborted) return [];
+          logger.warn('Discovery', `${engine} failed:`, err?.message || err);
         }
 
         // Delay between engines to avoid rate limiting
@@ -413,66 +497,55 @@ export function useDomainScraper() {
   const scrapeUrl = useCallback(async (url: string): Promise<{ text: string; quality: number }> => {
     if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
 
-    // Try direct fetch first
     try {
-      const html = await fetchWithTimeout(url, APP_CONFIG.perDomainTimeoutMs, 0);
-      const { isBlocked, reason } = detectLoginWall(html);
+      logger.info('Scraper', `WebView scrape → ${url}`);
+      const result = await requestViaWebView(url, 'scrape', APP_CONFIG.perDomainTimeoutMs);
+      if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
 
-      if (!isBlocked) {
-        const text = htmlToText(html);
-        const quality = scoreContentQuality(text);
-        if (text.length >= 100 && quality >= 2) {
-          logger.scrapeSuccess(url, text.length);
-          return { text: text.substring(0, 100000), quality };
-        }
-        if (text.length >= 100) {
-          // Low quality but has content — still return it with low score
-          logger.scrapeSuccess(url, text.length);
-          return { text: text.substring(0, 100000), quality: Math.max(quality, 1) };
-        }
-        logger.scrapeFail(url, `too short (${text.length}c)`);
-      } else {
+      const text = result.text || '';
+      const { isBlocked, reason } = detectLoginWall(text);
+      if (isBlocked) {
         logger.scrapeFail(url, `blocked: ${reason}`);
+        return { text: '', quality: 0 };
       }
+
+      const quality = scoreContentQuality(text);
+      if (text.length >= 100) {
+        logger.scrapeSuccess(url, text.length);
+        return { text: text.substring(0, 100000), quality: Math.max(quality, 1) };
+      }
+      logger.scrapeFail(url, `too short (${text.length}c)`);
     } catch (err: any) {
+      if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
       logger.scrapeFail(url, err?.message || 'failed');
-    }
 
-    // Fallback 1: Try with different User-Agent
-    try {
-      const html = await fetchWithTimeout(url, APP_CONFIG.perDomainTimeoutMs, 1);
-      const { isBlocked } = detectLoginWall(html);
-      if (!isBlocked) {
-        const text = htmlToText(html);
-        const quality = scoreContentQuality(text);
-        if (text.length >= 100) {
-          logger.scrapeSuccess(url, text.length);
-          return { text: text.substring(0, 100000), quality: Math.max(quality, 1) };
+      // Fallback to Google Cache
+      const cacheUrls = getCacheUrl(url);
+      for (const cacheUrl of cacheUrls) {
+        if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
+        try {
+          logger.info('Scraper', `WebView fallback scrape → ${cacheUrl}`);
+          const cacheResult = await requestViaWebView(cacheUrl, 'scrape', APP_CONFIG.perDomainTimeoutMs / 2);
+          if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
+
+          const cacheText = cacheResult.text || '';
+          const { isBlocked: cacheBlocked } = detectLoginWall(cacheText);
+          if (!cacheBlocked) {
+            const quality = scoreContentQuality(cacheText);
+            if (cacheText.length >= 100) {
+              logger.scrapeSuccess(`${cacheUrl} (cache of ${url})`, cacheText.length);
+              return { text: cacheText.substring(0, 100000), quality: Math.max(quality, 1) };
+            }
+          }
+        } catch {
+          if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
         }
       }
-    } catch { /* fallback failed */ }
-
-    // Fallback 2: Try Google Cache
-    const cacheUrls = getCacheUrl(url);
-    for (const cacheUrl of cacheUrls) {
-      try {
-        const html = await fetchWithTimeout(cacheUrl, APP_CONFIG.perDomainTimeoutMs / 2, 0);
-        const { isBlocked } = detectLoginWall(html);
-        if (!isBlocked) {
-          const text = htmlToText(html);
-          const quality = scoreContentQuality(text);
-          if (text.length >= 100) {
-            logger.scrapeSuccess(`${cacheUrl} (cache of ${url})`, text.length);
-            return { text: text.substring(0, 100000), quality: Math.max(quality, 1) };
-          }
-        }
-      } catch { /* cache fallback failed */ }
     }
 
     return { text: '', quality: 0 };
   }, []);
 
-  // Reserved for future WebView fallback
   const setWebViewRef = useCallback((_ref: any) => {}, []);
   const handleMessage = useCallback((_event: any) => {}, []);
   const onLoadEnd = useCallback(() => {}, []);

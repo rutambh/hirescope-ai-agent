@@ -61,13 +61,13 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
 
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
-              <Ionicons name="cash-outline" size={13} color={c.textSecondary} />
+              <Ionicons name="cash-outline" size={16} color={c.textSecondary} />
               <Text style={[styles.infoVal, { color: c.textSecondary }]} numberOfLines={1}>
                 {formattedMax.split('/')[0]}
               </Text>
             </View>
             <View style={styles.infoItem}>
-              <Ionicons name="people-outline" size={13} color={c.textSecondary} />
+              <Ionicons name="people-outline" size={16} color={c.textSecondary} />
               <Text style={[styles.infoVal, { color: c.textSecondary }]}>
                 {results.sourcesCount || 0} Sources
               </Text>
@@ -78,7 +78,7 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
 
       <View style={[styles.actionArea, { borderTopColor: c.border }]}>
         <TouchableOpacity onPress={() => onDelete(record.id)} style={styles.deleteBtn}>
-          <Ionicons name="trash-outline" size={16} color={c.danger} />
+          <Ionicons name="trash-outline" size={20} color={c.danger} />
         </TouchableOpacity>
         <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: c.primaryLight, borderColor: c.primary + '30' }]} onPress={() => onView(record)}>
           <Text style={[styles.detailsBtnText, { color: c.primary }]}>Details</Text>
@@ -111,28 +111,28 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   roleTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     flex: 1,
   },
   metaSub: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '500',
     marginTop: 2,
   },
   infoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
+    gap: 8,
+    marginTop: 6,
   },
   infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
   },
   infoVal: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
   },
   actionArea: {
@@ -144,19 +144,19 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xs,
   },
   deleteBtn: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   detailsBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 9999,
     borderWidth: 1,
   },
   detailsBtnText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
   },
 });

@@ -1,4 +1,5 @@
 import { FinalResults, SearchFilters } from '../types';
+import { isValidReviewSnippet } from './dataExtractor';
 
 // ─── Extraction Prompt: Raw page text → Structured JSON ───────────────────────
 
@@ -9,12 +10,30 @@ export function buildExtractionPrompt(
 ): string {
   const location = filters.country;
 
+  // Filter raw text line by line to protect the model from seeing raw low-quality junk/scraped UI text
+  const lines = allText.split('\n');
+  const filteredLines = lines
+    .map(line => line.trim())
+    .filter(line => {
+      if (line.length === 0) return false;
+      const lower = line.toLowerCase();
+      // Keep rating and salary indicator lines so the model can extract them
+      const hasRating = /rating|star|★|\b[1-4]\.\d\b|5\.0/i.test(lower);
+      const hasSalary = /lpa|ctc|lakh|₹|inr|salary|\b\d+k\b/i.test(lower);
+      if (hasRating || hasSalary) return true;
+
+      // Otherwise, only keep if it is a valid review snippet
+      return isValidReviewSnippet(line);
+    });
+  const cleanText = filteredLines.join('\n');
+
   return `You are an expert data extraction engine specializing in employee reviews and compensation data. Your job is to extract structured information from scraped web pages about a company's work environment, pay, and culture.
 
 CONTEXT:
 Company: ${filters.company}
 Role: ${filters.role}
 Location: ${location}
+Target Experience: ${filters.experience} years
 Salary Format: ${filters.salaryFormat}
 Current Salary: ${filters.currentSalary}
 Pages scraped: ${pageCount}
@@ -42,7 +61,7 @@ FIELD RULES:
   Per month: e.g. 15000 means 15,000/month.
   If you see "12-18 LPA", set salaryMin: 12, salaryMax: 18.
   If you see a single number like "15 LPA", set both salaryMin and salaryMax to 15.
-  IMPORTANT: Only include salary data that is specifically for the "${filters.role}" role or closely related roles. Ignore generic company-wide salary data.
+  IMPORTANT: Only include salary data that is specifically for the "${filters.role}" role with around ${filters.experience} years of experience or closely related roles. Ignore generic company-wide salary data or salaries for vastly different experience levels if specific data is available.
 - pros: Positive employee feedback themes (max 10, each 3-8 words). Group similar sentiments. Examples: "Good work-life balance", "Strong learning culture", "Competitive pay".
 - cons: Negative employee feedback themes (max 10, each 3-8 words). Group similar sentiments. Examples: "Poor management", "Long working hours", "Limited growth".
 - snippets: Factual quotes or statements from reviews about pay, culture, or experience (max 5, each 10-50 words). Prefer direct statements like "Average salary for this role is 15 LPA" over vague ones.
@@ -57,7 +76,7 @@ ABSOLUTE RULES:
 - Prioritize data from well-known review sites (Glassdoor, AmbitionBox, Indeed, etc.) over generic content.
 
 SCRAPED TEXT:
-${allText.substring(0, 28000)}`; // Stay within ~20K token limit
+${cleanText.substring(0, 28000)}`; // Stay within ~20K token limit
 }
 
 // ─── Enhancement Prompt: Structured data → Natural language summary ──────────
@@ -100,8 +119,8 @@ export function buildEnhancementInput(
     salaryRange,
     hikeRange,
     confidence: results.confidence,
-    topPros: results.positives.slice(0, 3),
-    topCons: results.negatives.slice(0, 3),
+    topPros: results.positives.filter(isValidReviewSnippet).slice(0, 3),
+    topCons: results.negatives.filter(isValidReviewSnippet).slice(0, 3),
   };
 }
 
@@ -127,6 +146,8 @@ RULES:
 - Write in professional, neutral tone.
 - If data is missing (e.g. no rating), acknowledge it briefly and move on.
 - Use specific numbers from the data, not vague phrases.
+- Summarize ONLY the provided key strengths and concerns. Do NOT invent or assume any pros or cons not explicitly present in the input.
+- Do NOT include any page titles, FAQs, UI navigation, or other unrelated chrome text if any slipped through.
 
 DATA:
 Company: ${input.company}

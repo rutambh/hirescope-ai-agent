@@ -53,7 +53,94 @@ export function extractRatings(text: string): number[] {
 
 // ─── Salary Extraction ────────────────────────────────────────────────────────
 
-export function extractSalaries(
+const EXP_PATTERN = /\b(\d+)\s*(?:\+|plus)?\s*(?:-|–|—|to)?\s*(\d+)?\s*(?:year|years|yr|yrs|exp|experience)\b/gi;
+
+function getExperienceDistance(start: number, end: number | undefined, isPlus: boolean, target: number): number {
+  if (isPlus) {
+    if (target >= start) return 0;
+    return start - target;
+  }
+  if (end !== undefined) {
+    if (target >= start && target <= end) return 0;
+    return Math.min(Math.abs(start - target), Math.abs(end - target));
+  }
+  return Math.abs(start - target);
+}
+
+function getExperienceWindows(text: string, targetExp: number): string[] {
+  const windows: { windowText: string; distance: number }[] = [];
+  const clean = text.replace(/\s+/g, ' ');
+  let match: RegExpExecArray | null;
+  const re = new RegExp(EXP_PATTERN.source, EXP_PATTERN.flags);
+
+  while ((match = re.exec(clean)) !== null) {
+    const startVal = parseInt(match[1], 10);
+    const endVal = match[2] ? parseInt(match[2], 10) : undefined;
+    const matchStr = match[0].toLowerCase();
+    const isPlus = matchStr.includes('+') || matchStr.includes('plus');
+
+    if (!isNaN(startVal)) {
+      const distance = getExperienceDistance(startVal, endVal, isPlus, targetExp);
+      if (distance <= 2) {
+        const matchIdx = match.index;
+        // Extract window: 250 chars before and 250 chars after the match
+        const startIdx = Math.max(0, matchIdx - 250);
+        const endIdx = Math.min(clean.length, matchIdx + match[0].length + 250);
+        const windowText = clean.substring(startIdx, endIdx);
+        windows.push({ windowText, distance });
+      }
+    }
+  }
+
+  if (windows.length === 0) return [];
+
+  // Find the minimum distance
+  let minDistance = 999;
+  for (const w of windows) {
+    if (w.distance < minDistance) {
+      minDistance = w.distance;
+    }
+  }
+
+  // Return windows with the minimum distance (or within minDistance + 1 if minDistance <= 1)
+  const allowedMaxDistance = minDistance === 0 ? 1 : minDistance;
+  return windows
+    .filter(w => w.distance <= allowedMaxDistance)
+    .map(w => w.windowText);
+}
+
+function extractJsonLdSalaries(text: string, salaryFormat: string): number[] {
+  const values: number[] = [];
+  const idx = text.indexOf('=== JSON-LD START ===');
+  if (idx === -1) return [];
+  const jsonSection = text.substring(idx);
+
+  const numRegex = /["'](?:value|minValue|maxValue|amount|price)["']\s*:\s*(?:["']?([1-9]\d*(?:\.\d+)?)["']?)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = numRegex.exec(jsonSection)) !== null) {
+    const val = parseFloat(match[1]);
+    if (!isNaN(val) && val > 0) {
+      if (salaryFormat === 'LPA') {
+        if (val >= 50000 && val <= 10000000) {
+          values.push(val / 100000);
+        } else if (val > 0 && val < 300) {
+          values.push(val);
+        }
+      } else if (salaryFormat === 'per year') {
+        if (val >= 10000 && val <= 1000000) {
+          values.push(val);
+        }
+      } else if (salaryFormat === 'per month') {
+        if (val >= 1000 && val <= 200000) {
+          values.push(val);
+        }
+      }
+    }
+  }
+  return values;
+}
+
+export function extractSalariesRaw(
   text: string,
   salaryFormat: string
 ): number[] {
@@ -215,7 +302,36 @@ export function extractSalaries(
     }
   }
 
+  // Also parse and merge JSON-LD salaries
+  const jsonLdSalaries = extractJsonLdSalaries(text, salaryFormat);
+  values.push(...jsonLdSalaries);
+
   return values;
+}
+
+export function extractSalaries(
+  text: string,
+  salaryFormat: string,
+  experience?: number
+): number[] {
+  // If experience is specified, try to extract from experience-specific windows first
+  if (experience !== undefined && experience >= 0) {
+    const windows = getExperienceWindows(text, experience);
+    if (windows.length > 0) {
+      const windowSalaries: number[] = [];
+      for (const winText of windows) {
+        const sals = extractSalariesRaw(winText, salaryFormat);
+        windowSalaries.push(...sals);
+      }
+      // If we successfully found salaries in the experience-specific windows, return them!
+      if (windowSalaries.length > 0) {
+        return windowSalaries;
+      }
+    }
+  }
+
+  // Fallback / standard extraction
+  return extractSalariesRaw(text, salaryFormat);
 }
 
 const PRO_HEADERS = [
@@ -341,6 +457,152 @@ function isGarbageText(line: string, company: string): boolean {
   return false;
 }
 
+
+const CORE_REVIEW_KEYWORDS = new Set([
+  'work', 'culture', 'salary', 'pay', 'hike', 'appraisal', 'management',
+  'team', 'learning', 'growth', 'career', 'promotion', 'balance', 'hours',
+  'pressure', 'environment', 'colleagues', 'training', 'benefits',
+  'compensation', 'wlb', 'remote', 'hybrid', 'wfh', 'security', 'stable',
+  'politics', 'layoff', 'flexible', 'perks', 'insurance'
+]);
+
+const MINOR_WORDS = new Set([
+  'and', 'or', 'for', 'at', 'to', 'in', 'of', 'with', 'the', 'a', 'an', 'by', 'on', 'about', 'from', 'as',
+  'is', 'are', 'am', 'was', 'were', 'be', 'been', 'has', 'have', 'had', '&', 'but', 'nor', 'yet', 'so'
+]);
+
+function isTitleCase(text: string): boolean {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length < 4) return false; // Don't reject short phrases like "Learning & Growth"
+
+  let capCount = 0;
+  let checkedCount = 0;
+
+  for (const word of words) {
+    const cleanWord = word.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '');
+    if (!cleanWord) continue;
+    if (/^\d+$/.test(cleanWord)) continue;
+
+    if (MINOR_WORDS.has(cleanWord.toLowerCase())) {
+      if (cleanWord[0] === cleanWord[0].toUpperCase() && cleanWord[0] !== cleanWord[0].toLowerCase()) {
+        capCount++;
+        checkedCount++;
+      }
+      continue;
+    }
+
+    checkedCount++;
+    if (cleanWord[0] === cleanWord[0].toUpperCase() && cleanWord[0] !== cleanWord[0].toLowerCase()) {
+      capCount++;
+    }
+  }
+
+  return checkedCount > 0 && capCount === checkedCount;
+}
+
+export function isValidReviewSnippet(text: string): boolean {
+  if (!text) return false;
+  const trimmed = text.trim();
+
+  // 1. Word count check (under ~4 words or over ~40 words)
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length > 40) {
+    return false;
+  }
+  if (words.length < 4) {
+    // Only allow short snippets if they contain a core review keyword
+    const lower = trimmed.toLowerCase();
+    const hasCoreKeyword = Array.from(CORE_REVIEW_KEYWORDS).some(kw => lower.includes(kw));
+    if (!hasCoreKeyword) {
+      return false;
+    }
+  }
+
+  // 2. Starts with a question word and reads as an FAQ headline
+  const faqPattern = /^(?:what|how|why|when|who|which)\s+(?:is|are|was|were|does|do|did|can|could|should|would|will|to|about|role|skills|experience|benefits|salary)\b/i;
+  if (faqPattern.test(trimmed)) {
+    return false;
+  }
+
+  // 3. Ends with a trailing standalone number
+  if (/\s\d+$/.test(trimmed)) {
+    return false;
+  }
+
+  // 4. Contains OS/version/date noise
+  const osPattern = /(?:ios|android|windows|macos|os)\s+\d+(?:\.\d+)+/i;
+  if (osPattern.test(trimmed)) {
+    return false;
+  }
+
+  // Date noise (month + day)
+  const monthAbbr = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
+  const monthFull = 'january|february|march|april|may|june|july|august|september|october|november|december';
+  const monthPattern = new RegExp(`\\b(?:${monthAbbr}|${monthFull})\\s+\\d{1,2}\\b`, 'i');
+  const dayMonthPattern = new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${monthAbbr}|${monthFull})\\b`, 'i');
+  if (monthPattern.test(trimmed) || dayMonthPattern.test(trimmed)) {
+    return false;
+  }
+
+  // "Section" as structural word
+  if (/\bsections?\w*\b/i.test(trimmed)) {
+    return false;
+  }
+
+  // 5. Reads as Title Case navigation/menu text rather than a sentence
+  if (isTitleCase(trimmed)) {
+    return false;
+  }
+
+  return true;
+}
+
+export function isValidAISummary(text: string): boolean {
+  if (!text) return false;
+
+  // Split summary into sentences/paragraphs and check each
+  const sentences = text.split(/[.!?]\s+/).filter(Boolean);
+  if (sentences.length === 0) return false;
+
+  for (const s of sentences) {
+    const trimmed = s.trim();
+    if (trimmed.length === 0) continue;
+
+    // Checks similar to isValidReviewSnippet but without word limits since sentences can vary
+    const faqPattern = /^(?:what|how|why|when|who|which)\s+(?:is|are|was|were|does|do|did|can|could|should|would|will|to|about|role|skills|experience|benefits|salary)\b/i;
+    if (faqPattern.test(trimmed)) {
+      return false;
+    }
+
+    if (/\s\d+$/.test(trimmed)) {
+      return false;
+    }
+
+    const osPattern = /(?:ios|android|windows|macos|os)\s+\d+(?:\.\d+)+/i;
+    if (osPattern.test(trimmed)) {
+      return false;
+    }
+
+    const monthAbbr = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
+    const monthFull = 'january|february|march|april|may|june|july|august|september|october|november|december';
+    const monthPattern = new RegExp(`\\b(?:${monthAbbr}|${monthFull})\\s+\\d{1,2}\\b`, 'i');
+    const dayMonthPattern = new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${monthAbbr}|${monthFull})\\b`, 'i');
+    if (monthPattern.test(trimmed) || dayMonthPattern.test(trimmed)) {
+      return false;
+    }
+
+    if (/\bsections?\w*\b/i.test(trimmed)) {
+      return false;
+    }
+
+    if (isTitleCase(trimmed)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function extractSection(text: string, headers: string[], company?: string): string[] {
   const results: string[] = [];
   const lower = text.toLowerCase();
@@ -369,6 +631,7 @@ function extractSection(text: string, headers: string[], company?: string): stri
         const cleaned = line.replace(/^[\-\*•·◦\d\.\)]+\s*/, '').trim();
         if (cleaned.length >= 5) {
           if (company && isGarbageText(cleaned, company)) continue;
+          if (!isValidReviewSnippet(cleaned)) continue;
           results.push(cleaned);
         }
       }
@@ -402,6 +665,7 @@ function extractSnippets(text: string, company?: string): string[] {
 
     // Skip garbage text (same filter used for section extraction)
     if (company && isGarbageText(trimmed, company)) continue;
+    if (!isValidReviewSnippet(trimmed)) continue;
 
     // Skip lines that look like navigation or UI chrome
     if (
@@ -419,6 +683,7 @@ function extractSnippets(text: string, company?: string): string[] {
 
   return snippets;
 }
+
 
 // ─── Page Content Cleaner ─────────────────────────────────────────────────────
 
@@ -444,12 +709,13 @@ export function extractStructuredRecord(
   source: string,
   rawText: string,
   salaryFormat: string,
-  company?: string
+  company?: string,
+  experience?: number
 ): StructuredRecord {
   const text = cleanPageText(rawText);
 
   const ratings = extractRatings(text);
-  const salaries = extractSalaries(text, salaryFormat);
+  const salaries = extractSalaries(text, salaryFormat, experience);
 
   // Sort salaries; use lowest as min, highest as max
   const sorted = [...salaries].sort((a, b) => a - b);

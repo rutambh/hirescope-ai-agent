@@ -49,7 +49,7 @@ export function useScraper() {
     cleanupIntervals();
     const store = useSearchStore.getState();
     if (activeSearchIdRef.current) {
-      store.removeActiveSearch(activeSearchIdRef.current);
+      store.updateActiveSearch(activeSearchIdRef.current, { phase: 'error' });
       activeSearchIdRef.current = null;
     }
   }, [cleanupIntervals]);
@@ -95,11 +95,13 @@ export function useScraper() {
       // ── Phase 1: URL Discovery ────────────────────────────────────────────
       useSearchStore.getState().updateActiveSearch(searchId, { phase: 'searching' });
 
+      const deadline = startTimeRef.current + APP_CONFIG.totalTimeoutMs;
+
       let discoveredUrls: string[] = [];
       try {
         logger.phase('searching', `Discovering URLs for ${filters.company} - ${filters.role}`);
         discoveredUrls = await domainScraper.discoverUrls(
-          filters.company, filters.role, filters.country
+          filters.company, filters.role, filters.country, filters.experience, deadline
         );
       } catch (err) {
         logger.error('Discovery', 'URL discovery failed', err);
@@ -108,7 +110,11 @@ export function useScraper() {
       useSearchStore.getState().updateActiveSearch(searchId, { urlsDiscovered: discoveredUrls.length });
       logger.info('Discovery', `URLs after filtering: ${discoveredUrls.length}`);
 
-      if (isCancelled()) { cleanupIntervals(); return; }
+      if (isCancelled()) {
+        cleanupIntervals();
+        useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+        return;
+      }
 
       // ── Phase 2: Page Scraping ────────────────────────────────────────────
       useSearchStore.getState().updateActiveSearch(searchId, { phase: 'extracting' });
@@ -119,7 +125,15 @@ export function useScraper() {
       let totalQuality = 0;
 
       for (let i = 0; i < urlsToProcess.length; i++) {
-        if (isCancelled()) { cleanupIntervals(); return; }
+        if (isCancelled()) {
+          cleanupIntervals();
+          useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+          return;
+        }
+        if (Date.now() >= deadline) {
+          logger.warn('Scraper', 'Total timeout reached during page scraping, stopping early');
+          break;
+        }
 
         const url = urlsToProcess[i];
         let result = { text: '', quality: 0 };
@@ -128,13 +142,30 @@ export function useScraper() {
           result = await domainScraper.scrapeUrl(url);
         } catch { }
 
+        if (isCancelled()) {
+          cleanupIntervals();
+          useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+          return;
+        }
+
         // Retry once if empty or low quality
         if (!result.text || result.quality < 2) {
           await delay(300 + Math.random() * 400);
+          if (isCancelled()) {
+            cleanupIntervals();
+            useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+            return;
+          }
           try {
             const retry = await domainScraper.scrapeUrl(url);
             if (retry.text.length > result.text.length) result = retry;
           } catch { }
+        }
+
+        if (isCancelled()) {
+          cleanupIntervals();
+          useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+          return;
         }
 
         if (result.text.length > 100) {
@@ -167,7 +198,11 @@ export function useScraper() {
 
       const avgQuality = successCount > 0 ? Math.round(totalQuality / successCount) : 0;
       logger.phase('extracting', `Scraped ${successCount}/${urlsToProcess.length} pages (avg quality: ${avgQuality})`);
-      if (isCancelled()) { cleanupIntervals(); return; }
+      if (isCancelled()) {
+        cleanupIntervals();
+        useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+        return;
+      }
 
       // ── Phase 3: Data Extraction ──────────────────────────────────────────
       cleanupIntervals();
@@ -187,7 +222,7 @@ export function useScraper() {
         logger.phase('ai-extract', 'Running SLM extraction on all pages');
         useSearchStore.getState().updateActiveSearch(searchId, { phase: 'ai-extract' });
         const rawTexts = successPoints.map(p => p.rawText);
-        const slmResult = await aiModel.extractFromPages(rawTexts, filters);
+        const slmResult = await aiModel.extractFromPages(rawTexts, filters, deadline);
         if (slmResult) {
           finalResults = {
             ...slmResult.results,
@@ -219,7 +254,7 @@ export function useScraper() {
         logger.phase('ai-enhance', 'Running AI enhancement summary');
         useSearchStore.getState().updateActiveSearch(searchId, { phase: 'ai-enhance' });
         try {
-          const enhResult = await aiModel.runEnhancement(finalResults, filters);
+          const enhResult = await aiModel.runEnhancement(finalResults, filters, deadline);
           if (enhResult) {
             finalResults = {
               ...finalResults,

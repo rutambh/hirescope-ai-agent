@@ -6,6 +6,7 @@ import {
   buildExtractionPrompt, buildEnhancementPrompt,
   buildEnhancementInput, parseExtractionJson,
 } from '../utils/aiEnhancer';
+import { isValidAISummary } from '../utils/dataExtractor';
 import { FinalResults, SearchFilters } from '../types';
 import { logger } from '../utils/logger';
 
@@ -203,7 +204,8 @@ export function useAIModel() {
 
   const extractFromPages = useCallback(async (
     rawTexts: string[],
-    filters: SearchFilters
+    filters: SearchFilters,
+    deadlineTimestamp?: number
   ): Promise<{ results: FinalResults; rawPrompt: string; rawResponse: string } | null> => {
     if (store.status !== 'installed') return null;
     if (!llamaModule) return null;
@@ -233,17 +235,33 @@ export function useAIModel() {
       let allResponses: string[] = [];
 
       for (let i = 0; i < chunks.length; i++) {
+        if (deadlineTimestamp && Date.now() >= deadlineTimestamp) {
+          logger.warn('AI Extraction', 'Deadline reached, stopping extraction early');
+          break;
+        }
+
         const chunk = chunks[i];
         const prompt = buildExtractionPrompt(chunk, filters, rawTexts.length);
         allPrompts.push(prompt);
 
-        const result = await ctx.completion({
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('AI inference timeout')), 30000)
+        );
+        const completionPromise = ctx.completion({
           prompt,
           n_predict: 3072,
           temperature: 0.1,
           top_p: 0.9,
           stop: ['\n\n\n'],
         });
+
+        let result;
+        try {
+          result = await Promise.race([completionPromise, timeoutPromise]);
+        } catch (err: any) {
+          logger.warn('AI Extraction', `Chunk ${i} failed or timed out: ${err?.message}`);
+          continue;
+        }
 
         const text = (result as any)?.text?.trim() || '';
         allResponses.push(text);
@@ -355,17 +373,30 @@ export function useAIModel() {
 
   const runEnhancement = useCallback(async (
     results: FinalResults,
-    filters: SearchFilters
+    filters: SearchFilters,
+    deadlineTimestamp?: number
   ): Promise<{ text: string; rawPrompt: string; rawResponse: string } | null> => {
     if (store.status !== 'installed') return null;
     if (!llamaModule) return null;
+    if (deadlineTimestamp && Date.now() >= deadlineTimestamp) {
+      logger.warn('AI Enhancement', 'Deadline reached, skipping enhancement');
+      return null;
+    }
 
     try {
-      const ctx = await ensureContext(4096);
       const input = buildEnhancementInput(results, filters);
+      if (input.topPros.length === 0 && input.topCons.length === 0) {
+        logger.info('AI Enhancement', 'No valid pros/cons found after filtering. Skipping enhancement call entirely.');
+        return null;
+      }
+
+      const ctx = await ensureContext(4096);
       const prompt = buildEnhancementPrompt(input);
 
-      const inferenceResult = await ctx.completion({
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('AI enhancement timeout')), 30000)
+      );
+      const completionPromise = ctx.completion({
         prompt,
         n_predict: 768,
         temperature: 0.2,
@@ -373,8 +404,22 @@ export function useAIModel() {
         stop: ['\n\n', 'DATA:', 'Company:', 'Location:'],
       });
 
+      let inferenceResult;
+      try {
+        inferenceResult = await Promise.race([completionPromise, timeoutPromise]);
+      } catch (err: any) {
+        logger.warn('AI Enhancement', `Enhancement failed or timed out: ${err?.message}`);
+        return null;
+      }
+
       const text = (inferenceResult as any)?.text?.trim();
       if (!text || text.length <= 10) return null;
+
+      // Validate the AI summary output before storing it
+      if (!isValidAISummary(text)) {
+        logger.warn('AI Enhancement', 'AI response failed quality validation (detected page titles, FAQs, OS noise, or formatting issues)');
+        return null;
+      }
 
       return {
         text,

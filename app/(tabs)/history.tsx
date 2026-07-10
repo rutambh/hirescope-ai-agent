@@ -49,6 +49,21 @@ export default function HistoryScreen() {
     setStopVisible(true);
   };
 
+  const handleRetry = (id: string) => {
+    searchStore.updateActiveSearch(id, {
+      phase: 'searching',
+      progressPercent: 0,
+      estimatedSecondsRemaining: 15 * 60,
+      urlsDiscovered: 0,
+      urlsProcessed: 0,
+      rawDataPoints: [],
+    });
+  };
+
+  const handleDismissActive = (id: string) => {
+    searchStore.removeActiveSearch(id);
+  };
+
   const sortedSearches = [...searches].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
@@ -58,6 +73,7 @@ export default function HistoryScreen() {
     if (phase === 'extracting') return 'Extracting data...';
     if (phase === 'ai-extract') return 'AI analyzing...';
     if (phase === 'ai-enhance') return 'AI summarizing...';
+    if (phase === 'error') return 'Stopped';
     return 'Scanning...';
   };
 
@@ -89,7 +105,13 @@ export default function HistoryScreen() {
                       key={search.id}
                       activeOpacity={0.7}
                       onPress={() => router.push('/research-details?live=true')}
-                      style={[styles.activeCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card, borderColor: c.primary + '50' }]}
+                      style={[
+                        styles.activeCard,
+                        {
+                          backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card,
+                          borderColor: search.phase === 'error' ? c.danger + '80' : c.primary + '50',
+                        },
+                      ]}
                     >
                       <View style={styles.activeCardTop}>
                         <View style={{ width: 36 }} />
@@ -102,14 +124,48 @@ export default function HistoryScreen() {
                         {search.filters.company} • {getEstimatedTimeText(search.phase)}
                       </Text>
                       <View style={[styles.barBg, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-                        <View style={[styles.barFill, { backgroundColor: c.primary, width: `${search.progressPercent}%` }]} />
+                        <View
+                          style={[
+                            styles.barFill,
+                            {
+                              backgroundColor: search.phase === 'error' ? c.danger : c.primary,
+                              width: `${search.progressPercent}%`,
+                            },
+                          ]}
+                        />
                       </View>
                       <Text style={[styles.progressUnder, { color: c.textMuted }]}>{Math.round(search.progressPercent)}%</Text>
                       <View style={styles.activeCardFooter}>
-                        <Text style={[styles.avatarCount, { color: c.primary }]}>Live Search</Text>
-                        <TouchableOpacity style={[styles.stopBtn, { backgroundColor: c.dangerLight }]} onPress={handleStop}>
-                          <Ionicons name="stop" size={12} color={c.danger} />
-                        </TouchableOpacity>
+                        <Text
+                          style={[
+                            styles.avatarCount,
+                            { color: search.phase === 'error' ? c.danger : c.primary },
+                          ]}
+                        >
+                          {search.phase === 'error' ? 'Stopped' : 'Live Search'}
+                        </Text>
+                        <View style={styles.actionsWrap}>
+                          {search.phase === 'error' ? (
+                            <>
+                              <TouchableOpacity
+                                style={[styles.stopBtn, { backgroundColor: c.primaryLight, marginRight: 8 }]}
+                                onPress={() => handleRetry(search.id)}
+                              >
+                                <Ionicons name="refresh" size={16} color={c.primary} />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.stopBtn, { backgroundColor: c.dangerLight }]}
+                                onPress={() => handleDismissActive(search.id)}
+                              >
+                                <Ionicons name="trash-outline" size={16} color={c.danger} />
+                              </TouchableOpacity>
+                            </>
+                          ) : (
+                            <TouchableOpacity style={[styles.stopBtn, { backgroundColor: c.dangerLight }]} onPress={handleStop}>
+                              <Ionicons name="stop" size={16} color={c.danger} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -302,29 +358,29 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   progressUnder: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: 8,
   },
   activeTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
   },
   activeMeta: {
-    fontSize: 13,
+    fontSize: 14,
     marginTop: 2,
     marginBottom: 8,
   },
   barBg: {
-    height: 4,
-    borderRadius: 2,
+    height: 6,
+    borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 8,
   },
   barFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 3,
   },
   activeCardFooter: {
     flexDirection: 'row',
@@ -332,15 +388,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   avatarCount: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
   },
   stopBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  actionsWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
   emptyIcon: { width: 64, height: 64, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.xl },
