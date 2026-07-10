@@ -52,7 +52,7 @@ export function useAiDownloadNotification() {
         Notifications.scheduleNotificationAsync({
           content: {
             title: 'AI Model Ready',
-            body: 'Restart the app to start using AI summaries.',
+            body: 'AI summaries are now active for your next research.',
             data: { screen: 'settings' },
             sound: true,
           },

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking,
-  Platform, Modal, useColorScheme, PanResponder, DevSettings, Share
+  Platform, Modal, useColorScheme, PanResponder, Share
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -396,17 +396,11 @@ export default function SettingsScreen() {
 
         <ThemedConfirm
           visible={restartAlertVisible}
-          title="AI Model Downloaded"
-          message="Restart the app now to enable AI summaries?"
-          confirmLabel="Restart"
-          cancelLabel="Later"
-          onConfirm={() => {
-            setRestartAlertVisible(false);
-            if (Platform.OS === 'android' || Platform.OS === 'ios') {
-              DevSettings.reload();
-            }
-          }}
-          onCancel={() => setRestartAlertVisible(false)}
+          title="AI Model Ready"
+          message="Consolidated AI summaries are now active for your next research!"
+          confirmLabel="OK"
+          singleButton
+          onConfirm={() => setRestartAlertVisible(false)}
         />
 
         <ThemedConfirm
