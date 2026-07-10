@@ -41,7 +41,7 @@ yarn-error.*
 /android
 
 # CI/CD Secrets
-docs/cicd/secrets/
+/docs
 
 # IDE files
 .mimocode/
