@@ -40,11 +40,13 @@ yarn-error.*
 /ios
 /android
 
-# CI/CD Secrets and internal docs (never tracked except README.md)
+# Markdown files — all ignored except README.md
+# Any new .md file added to the project is automatically excluded from git.
+*.md
+!README.md
+
+# Internal docs folder (also covered by *.md above, belt-and-suspenders)
 /docs
-AGENTS.md
-CLAUDE.md
-masterprompt.md
 
 # IDE files
 .mimocode/
