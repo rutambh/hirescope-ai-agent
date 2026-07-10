@@ -48,7 +48,15 @@ yarn-error.*
 # Internal docs folder (also covered by *.md above, belt-and-suspenders)
 /docs
 
-# IDE files
+# AI and IDE files
+.claude/
+.cursor/
+.windsurf/
 .mimocode/
 .opencode/
+.gemini/
+.copilot/
+.vscode/
+.idea/
+
 
