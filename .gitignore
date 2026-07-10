@@ -40,8 +40,11 @@ yarn-error.*
 /ios
 /android
 
-# CI/CD Secrets
+# CI/CD Secrets and internal docs (never tracked except README.md)
 /docs
+AGENTS.md
+CLAUDE.md
+masterprompt.md
 
 # IDE files
 .mimocode/
