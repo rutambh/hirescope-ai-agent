@@ -3,9 +3,12 @@ import { useSearchStore } from '../store/searchStore';
 import { useScraper } from '../hooks/useScraper';
 
 export function BackgroundScraper() {
-  const phase = useSearchStore((s) => s.activePhase);
+  const activeSearches = useSearchStore((s) => s.activeSearches);
   const scraper = useScraper();
   const startedRef = useRef(false);
+
+  const latestSearch = activeSearches[activeSearches.length - 1];
+  const phase = latestSearch?.phase ?? 'idle';
 
   useEffect(() => {
     if ((phase === 'searching' || phase === 'extracting') && !startedRef.current) {

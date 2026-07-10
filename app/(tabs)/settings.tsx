@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking,
-  Platform, Alert, Modal, useColorScheme, PanResponder, Switch, DevSettings, Share
+  Platform, Modal, useColorScheme, PanResponder, DevSettings, Share
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -11,6 +11,7 @@ import { useAppStore } from '../../src/store/appStore';
 import { useAIModel } from '../../src/hooks/useAIModel';
 import { APP_CONFIG } from '../../src/constants/config';
 import { LightColors, DarkColors, Spacing, Radius } from '../../src/constants/theme';
+import { ThemedConfirm } from '../../src/components/ThemedConfirm';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 MB';
@@ -30,35 +31,20 @@ export default function SettingsScreen() {
   const systemColorScheme = useColorScheme();
   const aiModel = useAIModel();
   const [downloadConfirmVisible, setDownloadConfirmVisible] = useState(false);
+  const [restartAlertVisible, setRestartAlertVisible] = useState(false);
+  const [copiedAlertVisible, setCopiedAlertVisible] = useState(false);
+  const [deleteModelVisible, setDeleteModelVisible] = useState(false);
+  const [shareErrorVisible, setShareErrorVisible] = useState(false);
+  const [shareErrorMsg, setShareErrorMsg] = useState('');
 
   const prevStatusRef = useRef(aiModel.status);
 
   useEffect(() => {
     if (prevStatusRef.current !== 'installed' && aiModel.status === 'installed') {
-      Alert.alert(
-        'AI Model Downloaded',
-        'Restart the app now to enable AI summaries?',
-        [
-          {
-            text: 'Later',
-            style: 'cancel',
-          },
-          {
-            text: 'Restart',
-            onPress: () => {
-              if (Platform.OS === 'android' || Platform.OS === 'ios') {
-                DevSettings.reload();
-              }
-            },
-          },
-        ]
-      );
+      setRestartAlertVisible(true);
     }
     prevStatusRef.current = aiModel.status;
   }, [aiModel.status]);
-
-  // Highlights color selections
-  const [selectedHighlight, setSelectedHighlight] = useState('indigo');
 
   const [sliderWidth, setSliderWidth] = useState(0);
   const [sliderLeft, setSliderLeft] = useState(0);
@@ -93,7 +79,7 @@ export default function SettingsScreen() {
 
   const handleCopyUPI = async () => {
     await Clipboard.setStringAsync('rutambh@upi');
-    Alert.alert('Copied!', 'UPI ID copied to clipboard.');
+    setCopiedAlertVisible(true);
   };
 
   const handleOpenBatterySettings = async () => {
@@ -116,10 +102,7 @@ export default function SettingsScreen() {
   }, [aiModel]);
 
   const handleDeleteModel = () => {
-    Alert.alert('Delete AI Model', 'Remove the ~350 MB model?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => aiModel.deleteModel() },
-    ]);
+    setDeleteModelVisible(true);
   };
 
   const handleShare = async () => {
@@ -128,7 +111,8 @@ export default function SettingsScreen() {
         message: 'Check out HireScope! Get consolidated salary ranges, employee ratings, and reviews locally and privately: https://play.google.com/store/apps/details?id=com.rutambh.hirescope',
       });
     } catch (err: any) {
-      Alert.alert('Share Failed', err.message);
+      setShareErrorMsg(err.message);
+      setShareErrorVisible(true);
     }
   };
 
@@ -150,14 +134,8 @@ export default function SettingsScreen() {
     const cfg = statusCfg[status] || statusCfg.not_installed;
 
     return (
-      <View style={[styles.aiCard, { 
-        backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.card, 
-        borderColor: isDark ? C.border : 'transparent',
-        shadowColor: isDark ? '#000' : C.primary,
-        shadowOpacity: isDark ? 0.15 : 0.04,
-        shadowOffset: { width: 0, height: 4 },
-        shadowRadius: 10,
-        elevation: 3
+      <View style={[styles.aiCard, {
+        backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.surface,
       }]}>
         <View style={styles.aiHeader}>
           <View style={[styles.aiIcon, { backgroundColor: C.primaryLight }]}>
@@ -185,11 +163,11 @@ export default function SettingsScreen() {
               {formatBytes(downloadedBytes)} / {formatBytes(totalBytes > 0 ? totalBytes : APP_CONFIG.modelExpectedSizeMb * 1024 * 1024)}
             </Text>
             <View style={styles.actionRow}>
-              <TouchableOpacity style={[styles.smallBtn, { backgroundColor: isDark ? C.surface : '#FFF', borderColor: isDark ? C.border : 'rgba(0,0,0,0.06)' }]} onPress={aiModel.pauseDownload}>
+              <TouchableOpacity style={[styles.smallBtn, { backgroundColor: isDark ? C.surface : C.bg }]} onPress={aiModel.pauseDownload}>
                 <Ionicons name="pause" size={12} color={C.text} />
                 <Text style={[styles.smallBtnText, { color: C.text }]}>Pause</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.smallBtn, { backgroundColor: C.dangerLight, borderColor: C.danger + '30' }]} onPress={aiModel.cancelDownload}>
+              <TouchableOpacity style={[styles.smallBtn, { backgroundColor: C.dangerLight }]} onPress={aiModel.cancelDownload}>
                 <Ionicons name="close" size={12} color={C.danger} />
                 <Text style={[styles.smallBtnText, { color: C.danger }]}>Cancel</Text>
               </TouchableOpacity>
@@ -208,7 +186,7 @@ export default function SettingsScreen() {
                 <Ionicons name="play" size={12} color={isDark ? '#051424' : '#FFF'} />
                 <Text style={[styles.primaryBtnText, { color: isDark ? '#051424' : '#FFF' }]}>Resume</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.smallBtn, { backgroundColor: C.dangerLight, borderColor: C.danger + '30' }]} onPress={aiModel.cancelDownload}>
+              <TouchableOpacity style={[styles.smallBtn, { backgroundColor: C.dangerLight }]} onPress={aiModel.cancelDownload}>
                 <Ionicons name="close" size={12} color={C.danger} />
                 <Text style={[styles.smallBtnText, { color: C.danger }]}>Cancel</Text>
               </TouchableOpacity>
@@ -237,11 +215,11 @@ export default function SettingsScreen() {
               </View>
             </View>
             <View style={styles.actionRow}>
-              <TouchableOpacity style={[styles.smallBtn, { backgroundColor: C.dangerLight, borderColor: C.danger + '30' }]} onPress={handleDeleteModel}>
+              <TouchableOpacity style={[styles.smallBtn, { backgroundColor: C.dangerLight }]} onPress={handleDeleteModel}>
                 <Ionicons name="trash-outline" size={12} color={C.danger} />
                 <Text style={[styles.smallBtnText, { color: C.danger }]}>Delete</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.smallBtn, { backgroundColor: isDark ? C.surface : '#FFF', borderColor: isDark ? C.border : 'rgba(0,0,0,0.06)' }]} onPress={() => { aiModel.deleteModel().then(() => setDownloadConfirmVisible(true)); }}>
+              <TouchableOpacity style={[styles.smallBtn, { backgroundColor: isDark ? C.surface : C.bg }]} onPress={() => { aiModel.deleteModel().then(() => setDownloadConfirmVisible(true)); }}>
                 <Ionicons name="refresh" size={12} color={C.text} />
                 <Text style={[styles.smallBtnText, { color: C.text }]}>Re-download</Text>
               </TouchableOpacity>
@@ -252,7 +230,7 @@ export default function SettingsScreen() {
         {status === 'error' && (
           <View style={styles.aiBody}>
             {errorMessage && (
-              <View style={[styles.errorBox, { backgroundColor: C.dangerLight, borderColor: C.danger + '30' }]}>
+              <View style={[styles.errorBox, { backgroundColor: C.dangerLight }]}>
                 <Ionicons name="alert-circle" size={12} color={C.danger} />
                 <Text style={[styles.errorText, { color: C.danger }]} numberOfLines={2}>{errorMessage}</Text>
               </View>
@@ -285,30 +263,20 @@ export default function SettingsScreen() {
         {/* Centered Tab Header - No back buttons */}
         <View style={styles.header}>
           <View style={{ width: 22 }} />
-          <Text style={[styles.headerTitle, { color: C.text }]}>Settings & Identity</Text>
+          <Text style={[styles.headerTitle, { color: C.text }]}>Settings</Text>
           <View style={{ width: 22 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          
-          {/* Hero Header */}
-          <View style={styles.heroHeader}>
-            <Text style={[styles.heroDesc, { color: C.textSecondary }]}>
-              Customize your Lumina experience. Manage your presence, performance, and environment.
-            </Text>
-          </View>
 
-          {/* Section: Personalization */}
-          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.card, borderColor: isDark ? C.border : 'transparent' }]}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="color-palette-outline" size={18} color={C.primary} />
-              <Text style={[styles.sectionTitle, { color: C.text }]}>Personalization</Text>
-            </View>
+          {/* AI Model — top of page, standalone */}
+          {renderAI()}
 
+          {/* Visual Theme */}
+          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.surface }]}>
             <View style={styles.settingItem}>
               <Text style={[styles.settingLabel, { color: C.textSecondary }]}>Visual Theme</Text>
-              <Text style={[styles.settingSubText, { color: C.textMuted }]}>Choose your atmospheric mode</Text>
-              
+
               <View style={styles.themeGrid}>
                 <TouchableOpacity
                   style={[styles.themeOption, theme === 'dark' && { borderColor: C.primary, borderWidth: 2 }]}
@@ -336,44 +304,13 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-
-            {/* Brand Highlights */}
-            <View style={styles.settingItem}>
-              <Text style={[styles.settingLabel, { color: C.textSecondary }]}>Brand Highlights</Text>
-              <View style={styles.colorRow}>
-                {['indigo', 'blue', 'pink', 'emerald', 'amber'].map((color) => {
-                  const colors: Record<string, string> = {
-                    indigo: C.primaryDark,
-                    blue: C.accent,
-                    pink: C.warning,
-                    emerald: '#34D399',
-                    amber: '#FBBF24',
-                  };
-                  const active = selectedHighlight === color;
-                  return (
-                    <TouchableOpacity
-                      key={color}
-                      style={[styles.colorCircle, { backgroundColor: colors[color], borderColor: active ? C.text : 'transparent' }]}
-                      onPress={() => setSelectedHighlight(color)}
-                    />
-                  );
-                })}
-              </View>
-            </View>
           </View>
 
-
-
-          {/* Section: AI Enhancement & Scrape Limit */}
-          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.card, borderColor: isDark ? C.border : 'transparent' }]}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="sparkles-outline" size={18} color={C.primary} />
-              <Text style={[styles.sectionTitle, { color: C.text }]}>AI & Search Settings</Text>
-            </View>
-
+          {/* Scrape Domain Limit */}
+          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.surface }]}>
             <View style={styles.sliderSection}>
               <View style={styles.sliderHeader}>
-                <Text style={[styles.sliderLabel, { color: C.textSecondary }]}>Scrape Domain Limit</Text>
+                <Text style={[styles.sliderLabel, { color: C.textSecondary }]}>Search Domain Limit</Text>
                 <View style={[styles.chip, { backgroundColor: C.primaryLight }]}>
                   <Text style={[styles.chipText, { color: C.primary }]}>{maxDomainsToScrape}</Text>
                 </View>
@@ -391,18 +328,16 @@ export default function SettingsScreen() {
                 <Text style={[styles.rangeText, { color: C.textMuted }]}>50</Text>
               </View>
             </View>
-
-            {renderAI()}
           </View>
 
-          {/* Section: Support & Native Systems */}
-          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.card, borderColor: isDark ? C.border : 'transparent' }]}>
+          {/* System & Support */}
+          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.surface }]}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="settings-outline" size={18} color={C.textSecondary} />
               <Text style={[styles.sectionTitle, { color: C.text }]}>System & Support</Text>
             </View>
 
-            <TouchableOpacity style={[styles.linkRow, { borderBottomColor: C.border }]} onPress={handleOpenBatterySettings}>
+            <TouchableOpacity style={styles.linkRow} onPress={handleOpenBatterySettings}>
               <View style={[styles.linkIcon, { backgroundColor: C.warningLight }]}>
                 <Ionicons name="battery-charging" size={16} color={C.warning} />
               </View>
@@ -410,7 +345,7 @@ export default function SettingsScreen() {
               <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.linkRow, { borderBottomColor: C.border }]} onPress={handleOpenAppInfo}>
+            <TouchableOpacity style={styles.linkRow} onPress={handleOpenAppInfo}>
               <View style={[styles.linkIcon, { backgroundColor: C.primaryLight }]}>
                 <Ionicons name="settings-outline" size={16} color={C.primary} />
               </View>
@@ -418,7 +353,7 @@ export default function SettingsScreen() {
               <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.linkRow, { borderBottomWidth: 0 }]} onPress={handleShare}>
+            <TouchableOpacity style={styles.linkRow} onPress={handleShare}>
               <View style={[styles.linkIcon, { backgroundColor: C.primaryLight }]}>
                 <Ionicons name="share-outline" size={16} color={C.primary} />
               </View>
@@ -427,18 +362,16 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Removed Logout Action Area */}
-
         </ScrollView>
 
         <Modal visible={downloadConfirmVisible} transparent animationType="fade" onRequestClose={() => setDownloadConfirmVisible(false)}>
-          <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setDownloadConfirmVisible(false)}>
-            <View style={[styles.confirmModal, { backgroundColor: C.surface, borderColor: C.border }]}>
+          <TouchableOpacity style={[styles.overlay, { backgroundColor: C.overlay }]} activeOpacity={1} onPress={() => setDownloadConfirmVisible(false)}>
+            <View style={[styles.confirmModal, { backgroundColor: C.surface }]}>
               <View style={[styles.confirmIcon, { backgroundColor: C.primaryLight }]}>
                 <Ionicons name="sparkles" size={26} color={C.primary} />
               </View>
               <Text style={[styles.confirmTitle, { color: C.text }]}>Download AI Model?</Text>
-              <View style={[styles.confirmDetails, { backgroundColor: C.surfaceAlt, borderColor: C.border }]}>
+              <View style={[styles.confirmDetails, { backgroundColor: C.surfaceAlt }]}>
                 <View style={styles.confirmRow}>
                   <Text style={[styles.confirmKey, { color: C.textSecondary }]}>Model</Text>
                   <Text style={[styles.confirmValue, { color: C.text }]}>{APP_CONFIG.modelDisplayName}</Text>
@@ -450,7 +383,7 @@ export default function SettingsScreen() {
                 </View>
               </View>
               <View style={styles.confirmActions}>
-                <TouchableOpacity style={[styles.smallBtn, { backgroundColor: C.surfaceAlt, borderColor: C.border }]} onPress={() => setDownloadConfirmVisible(false)}>
+                <TouchableOpacity style={[styles.smallBtn, { backgroundColor: C.surfaceAlt }]} onPress={() => setDownloadConfirmVisible(false)}>
                   <Text style={[styles.smallBtnText, { color: C.text }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: C.primary }]} onPress={handleStartDownload}>
@@ -460,6 +393,52 @@ export default function SettingsScreen() {
             </View>
           </TouchableOpacity>
         </Modal>
+
+        <ThemedConfirm
+          visible={restartAlertVisible}
+          title="AI Model Downloaded"
+          message="Restart the app now to enable AI summaries?"
+          confirmLabel="Restart"
+          cancelLabel="Later"
+          onConfirm={() => {
+            setRestartAlertVisible(false);
+            if (Platform.OS === 'android' || Platform.OS === 'ios') {
+              DevSettings.reload();
+            }
+          }}
+          onCancel={() => setRestartAlertVisible(false)}
+        />
+
+        <ThemedConfirm
+          visible={copiedAlertVisible}
+          title="Copied!"
+          message="UPI ID copied to clipboard."
+          confirmLabel="OK"
+          singleButton
+          onConfirm={() => setCopiedAlertVisible(false)}
+        />
+
+        <ThemedConfirm
+          visible={deleteModelVisible}
+          title="Delete AI Model"
+          message={`Remove the ~${APP_CONFIG.modelExpectedSizeMb} MB model?`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => {
+            setDeleteModelVisible(false);
+            aiModel.deleteModel();
+          }}
+          onCancel={() => setDeleteModelVisible(false)}
+        />
+
+        <ThemedConfirm
+          visible={shareErrorVisible}
+          title="Share Failed"
+          message={shareErrorMsg}
+          confirmLabel="OK"
+          singleButton
+          onConfirm={() => setShareErrorVisible(false)}
+        />
       </SafeAreaView>
     </View>
   );
@@ -476,7 +455,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   headerTitle: { fontSize: 18, fontWeight: '700', flex: 1, textAlign: 'center' },
-  scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: Spacing.massive },
+  scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xs, paddingBottom: Spacing.massive },
   heroHeader: {
     marginVertical: Spacing.sm,
     paddingHorizontal: Spacing.xs,
@@ -489,7 +468,6 @@ const styles = StyleSheet.create({
   },
   glassCard: {
     borderRadius: 24,
-    borderWidth: 1,
     padding: Spacing.lg,
     marginBottom: Spacing.md,
   },
@@ -524,9 +502,6 @@ const styles = StyleSheet.create({
   themeOption: {
     flex: 1,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    backgroundColor: 'rgba(255,255,255,0.02)',
     padding: 8,
     alignItems: 'center',
     gap: 8,
@@ -535,31 +510,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 48,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
   },
   themeText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  colorRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.xs,
-  },
-  colorCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2.5,
   },
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.03)',
   },
   switchText: {
     flex: 1,
@@ -623,17 +583,17 @@ const styles = StyleSheet.create({
   sliderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
   chip: { paddingHorizontal: Spacing.sm, paddingVertical: 3, borderRadius: Radius.full },
   chipText: { fontSize: 12, fontWeight: '700' },
-  sliderContainer: { height: 32, justifyContent: 'center' },
-  sliderTrackBg: { height: 5, borderRadius: Radius.full, position: 'relative', justifyContent: 'center' },
+  sliderContainer: { height: 44, justifyContent: 'center' },
+  sliderTrackBg: { height: 6, borderRadius: Radius.full, position: 'relative', justifyContent: 'center' },
   sliderTrackFill: { height: '100%', borderRadius: Radius.full },
-  sliderThumb: { position: 'absolute', width: 20, height: 20, borderRadius: 10, borderWidth: 3, marginLeft: -10 },
+  sliderThumb: { position: 'absolute', width: 24, height: 24, borderRadius: 12, borderWidth: 3, marginLeft: -12 },
   rangeLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.xs },
   rangeText: { fontSize: 10, fontWeight: '500' },
   aiCard: {
     borderRadius: 16,
     padding: Spacing.md,
-    borderWidth: 1,
-    marginTop: Spacing.md,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   aiHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
   aiIcon: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: Spacing.md },
@@ -656,23 +616,23 @@ const styles = StyleSheet.create({
   metaValue: { fontSize: 13, fontWeight: '600' },
   aiDesc: { fontSize: 12, lineHeight: 18, marginBottom: Spacing.md },
   actionRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
-  smallBtn: { flex: 1, borderRadius: Radius.md, borderWidth: 1, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
+  smallBtn: { flex: 1, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
   smallBtnText: { fontSize: 13, fontWeight: '600' },
   primaryBtn: { flex: 1, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
   primaryBtnText: { color: '#080716', fontSize: 13, fontWeight: '700' },
-  errorBox: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, borderRadius: Radius.md, borderWidth: 1, marginBottom: Spacing.md, gap: Spacing.sm },
+  errorBox: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, borderRadius: Radius.md, marginBottom: Spacing.md, gap: Spacing.sm },
   errorText: { fontSize: 12, flex: 1 },
-  linkRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.md, borderBottomWidth: 1, gap: Spacing.md },
+  linkRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.md, gap: Spacing.md },
   linkIcon: { width: 32, height: 32, borderRadius: Radius.sm, justifyContent: 'center', alignItems: 'center' },
   linkLabel: { flex: 1, fontSize: 13, fontWeight: '600' },
   linkSub: { fontSize: 11, marginTop: 1 },
   copyBtn: { paddingHorizontal: Spacing.md, paddingVertical: 5, borderRadius: Radius.full },
   copyBtnText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
-  overlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.75)', justifyContent: 'center', alignItems: 'center' },
-  confirmModal: { borderRadius: 20, borderWidth: 1, width: '86%', padding: Spacing.xl },
+  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  confirmModal: { borderRadius: Radius.xl, width: '86%', padding: Spacing.xl },
   confirmIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: Spacing.md },
   confirmTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: Spacing.lg },
-  confirmDetails: { borderRadius: Radius.md, borderWidth: 1, padding: Spacing.md, marginBottom: Spacing.md },
+  confirmDetails: { borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md },
   confirmRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
   confirmDivider: { height: 1, marginVertical: 2 },
   confirmKey: { fontSize: 12 },

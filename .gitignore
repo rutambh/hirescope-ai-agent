@@ -42,3 +42,8 @@ yarn-error.*
 
 # CI/CD Secrets
 docs/cicd/secrets/
+
+# IDE files
+.mimocode/
+.opencode/
+

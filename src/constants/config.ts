@@ -13,18 +13,26 @@ export const APP_CONFIG = {
 
   // Search query templates — {company}, {role}, and {country} are replaced at runtime
   //
-  // Three targeted categories: Reviews (pros/cons), Ratings, Salary
-  // Each category has a primary and a variant query for broader coverage.
+  // Five targeted categories for maximum coverage
   searchQueryTemplates: [
     // ── Category 1: Reviews → extracts Pros & Cons ──
     '{company} {country} {role} Reviews',
     '{company} {country} {role} employee reviews pros cons',
+    '{company} {role} reviews {country}',
     // ── Category 2: Ratings → extracts star ratings ──
     '{company} {country} {role} Ratings',
     '{company} {country} {role} employee rating',
+    '{company} {role} rating {country}',
     // ── Category 3: Salary → extracts salary range ──
     '{company} {country} {role} Salary',
     '{company} {country} {role} compensation pay',
+    '{company} {role} salary range {country}',
+    // ── Category 4: Glassdoor/AmbitionBox specific ──
+    'site:glassdoor.com {company} {role} salary {country}',
+    'site:ambitionbox.com {company} {role} reviews',
+    // ── Category 5: General employment data ──
+    '{company} {role} hiring {country} salary package',
+    '{company} {role} CTC {country} experience',
   ] as string[],
 
   // Search engine endpoints
@@ -43,12 +51,12 @@ export const APP_CONFIG = {
   aiInferenceTimeoutMs: 30 * 60000, // match total timeout; AI gets as long as it needs
 
   // ─── AI Model (Optional On-Device Enhancement) ────────────────────────────
-  // Update modelDownloadUrl after uploading to your host
+  // Qwen2.5-0.5B-Instruct (q4_k_m) — ~300MB, fast on mobile, good for extraction
   modelDownloadUrl: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf',
   modelFileName: 'model.gguf',
-  modelExpectedSizeMb: 350,
-  modelDisplayName: 'HireScope AI Lite',
-  modelVersion: '1.0',
+  modelExpectedSizeMb: 300,
+  modelDisplayName: 'HireScope AI',
+  modelVersion: '3.0',
   // SHA-256 of the GGUF file — set this after you download and verify the file
   modelExpectedChecksum: '',
 

@@ -1,16 +1,18 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, useColorScheme, Platform,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSearchStore } from '../src/store/searchStore';
-import { getCountryByName } from '../src/constants/countries';
+import { INDIA } from '../src/constants/countries';
 import { useAppStore } from '../src/store/appStore';
 import { formatSalary } from '../src/utils/currency';
 import { LightColors, DarkColors, Spacing, Radius } from '../src/constants/theme';
 import { ConfidenceCard } from '../src/components/ConfidenceCard';
+import { SalaryCard } from '../src/components/SalaryCard';
+import { ProsConsCard } from '../src/components/ProsConsCard';
 
 export default function ResultsScreen() {
   const router = useRouter();
@@ -28,11 +30,7 @@ export default function ResultsScreen() {
 
   if (!filters) return null;
 
-  const country = getCountryByName(filters.country) || {
-    name: filters.country, code: 'IN', currency: 'Indian Rupee',
-    currencyCode: filters.currencyCode, currencySymbol: filters.currency,
-    salaryFormat: filters.salaryFormat, placeholder: '',
-  };
+  const country = INDIA;
 
   const hasData = finalResults !== null && (
     finalResults.rating !== null || finalResults.salaryMin !== null || finalResults.positives.length > 0
@@ -106,100 +104,46 @@ export default function ResultsScreen() {
           {/* Data Confidence & AI Summary */}
           <ConfidenceCard results={finalResults} />
 
-          {/* Estimated Median Salary Card */}
-          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card, borderColor: isDark ? c.border : 'rgba(0, 0, 0, 0.05)' }]}>
-            <Text style={[styles.cardSub, { color: c.accent }]}>ESTIMATED MEDIAN SALARY</Text>
-            <View style={styles.salaryValueRow}>
-              <Text style={[styles.salaryAmount, { color: c.text }]}>{medianFormatted.split('/')[0]}</Text>
-              <Text style={[styles.salaryUnit, { color: c.accent }]}>/yr</Text>
-            </View>
+          {/* Salary Card — dedicated component with current vs market comparison */}
+          <SalaryCard results={finalResults} filters={filters} country={country} />
 
-            {/* Salary Distribution Chart */}
-            <View style={styles.chartContainer}>
-              <View style={styles.chartLabels}>
-                <Text style={[styles.chartLabelText, { color: c.textSecondary }]}>{minFormatted.split('/')[0]}</Text>
-                <Text style={[styles.chartLabelText, { color: c.textSecondary }]}>{maxFormatted.split('/')[0]}</Text>
-              </View>
-              <View style={styles.chartBars}>
-                <View style={[styles.chartBar, { height: '15%', backgroundColor: c.primary + '15' }]} />
-                <View style={[styles.chartBar, { height: '30%', backgroundColor: c.primary + '25' }]} />
-                <View style={[styles.chartBar, { height: '55%', backgroundColor: c.primary + '40' }]} />
-                <View style={[styles.chartBar, { height: '80%', backgroundColor: c.primaryDark + '60' }]} />
-                <View style={[styles.chartBar, { height: '100%', backgroundColor: c.primaryDark, shadowColor: c.primaryDark, shadowOpacity: 0.5, shadowRadius: 10, elevation: 6 }]} />
-                <View style={[styles.chartBar, { height: '70%', backgroundColor: c.primaryDark + '80' }]} />
-                <View style={[styles.chartBar, { height: '40%', backgroundColor: c.primary + '35' }]} />
-                <View style={[styles.chartBar, { height: '20%', backgroundColor: c.primary + '20' }]} />
-                <View style={[styles.chartBar, { height: '10%', backgroundColor: c.primary + '10' }]} />
-              </View>
-              <View style={styles.chartFooter}>
-                <View style={styles.marketAvgTextWrap}>
-                  <Text style={[styles.marketAvgText, { color: c.primary }]}>Market Average</Text>
-                  <Text style={[styles.marketAvgSub, { color: c.textMuted }]}>Aggregated Data</Text>
-                </View>
-              </View>
-            </View>
-          </View>
+          {/* Market Sentiment — Pros vs Cons */}
+          <ProsConsCard positives={finalResults.positives} negatives={finalResults.negatives} />
 
-          {/* Market Sentiment — Research Bifurcated (Pros vs Cons) */}
-          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card, borderColor: isDark ? c.border : 'rgba(0, 0, 0, 0.05)' }]}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="trending-up-outline" size={18} color={c.primary} />
-              <Text style={[styles.sectionTitle, { color: c.text }]}>Market Sentiment</Text>
-            </View>
-            <View style={styles.sentimentList}>
-              {finalResults.positives.length > 0 && (
-                <View style={styles.bifurcatedGroup}>
-                  <Text style={[styles.bifurcatedLabel, { color: c.primary }]}>Strengths</Text>
-                  {finalResults.positives.map((item, idx) => (
-                    <View key={`pos-${idx}`} style={[styles.sentimentItem, { borderLeftColor: c.primary, backgroundColor: isDark ? c.surfaceAlt : 'rgba(53, 37, 205, 0.03)' }]}>
-                      <View style={styles.sentimentTitleRow}>
-                        <Ionicons name="checkmark-circle" size={16} color={c.primary} />
-                        <Text style={[styles.sentimentTag, { color: c.primary }]}>{item}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-              {finalResults.negatives.length > 0 && (
-                <View style={styles.bifurcatedGroup}>
-                  <Text style={[styles.bifurcatedLabel, { color: c.danger }]}>Concerns</Text>
-                  {finalResults.negatives.map((item, idx) => (
-                    <View key={`neg-${idx}`} style={[styles.sentimentItem, { borderLeftColor: c.danger, backgroundColor: isDark ? c.surfaceAlt : 'rgba(255, 180, 171, 0.04)' }]}>
-                      <View style={styles.sentimentTitleRow}>
-                        <Ionicons name="warning-outline" size={16} color={c.danger} />
-                        <Text style={[styles.sentimentTag, { color: c.danger }]}>{item}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Company Pulse */}
+          {/* Research Insights — Dynamic data from scraping */}
           <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card, borderColor: isDark ? c.border : 'rgba(0, 0, 0, 0.05)' }]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="stats-chart-outline" size={18} color={c.accent} />
-              <Text style={[styles.sectionTitle, { color: c.text }]}>Company Pulse</Text>
+              <Text style={[styles.sectionTitle, { color: c.text }]}>Research Insights</Text>
             </View>
             <View style={styles.pulseGrid}>
               <View style={[styles.pulseCard, { backgroundColor: isDark ? c.surfaceAlt : 'rgba(53, 37, 205, 0.03)' }]}>
-                <Text style={[styles.pulseLabel, { color: c.accent }]}>HIRING VELOCITY</Text>
-                <View style={styles.pulseValueRow}>
-                  <Text style={[styles.pulseValue, { color: c.text }]}>High</Text>
-                  <Ionicons name="speedometer-outline" size={20} color={c.primary} />
-                </View>
-                <Text style={[styles.pulseDesc, { color: c.textSecondary }]}>Roles are filled 22% faster than last quarter.</Text>
-              </View>
-              <View style={[styles.pulseCard, { backgroundColor: isDark ? c.surfaceAlt : 'rgba(53, 37, 205, 0.03)' }]}>
-                <Text style={[styles.pulseLabel, { color: c.accent }]}>BENEFIT RATING</Text>
+                <Text style={[styles.pulseLabel, { color: c.accent }]}>DATA CONFIDENCE</Text>
                 <View style={styles.pulseValueRow}>
                   <Text style={[styles.pulseValue, { color: c.text }]}>
-                    {finalResults.rating ? finalResults.rating.toFixed(1) : '4.8'}
+                    {finalResults.confidence === 'high' ? 'Strong' : finalResults.confidence === 'medium' ? 'Moderate' : finalResults.confidence === 'low' ? 'Limited' : 'Sparse'}
+                  </Text>
+                  <Ionicons name="shield-checkmark-outline" size={20} color={c.primary} />
+                </View>
+                <Text style={[styles.pulseDesc, { color: c.textSecondary }]}>
+                  {finalResults.sourcesCount} sources from {finalResults.domainsScraped} domains
+                </Text>
+              </View>
+              <View style={[styles.pulseCard, { backgroundColor: isDark ? c.surfaceAlt : 'rgba(53, 37, 205, 0.03)' }]}>
+                <Text style={[styles.pulseLabel, { color: c.accent }]}>EMPLOYEE RATING</Text>
+                <View style={styles.pulseValueRow}>
+                  <Text style={[styles.pulseValue, { color: c.text }]}>
+                    {finalResults.rating ? finalResults.rating.toFixed(1) : 'N/A'}
                   </Text>
                   <Ionicons name="star" size={18} color={c.primary} />
                 </View>
-                <Text style={[styles.pulseDesc, { color: c.textSecondary }]}>Exceptional equity & 401k matching.</Text>
+                <Text style={[styles.pulseDesc, { color: c.textSecondary }]}>
+                  {finalResults.rating
+                    ? finalResults.rating >= 4.0 ? 'Strong employee satisfaction'
+                    : finalResults.rating >= 3.0 ? 'Average employee satisfaction'
+                    : 'Below average — review concerns'
+                    : 'Rating data not available'}
+                </Text>
               </View>
             </View>
           </View>
@@ -207,7 +151,7 @@ export default function ResultsScreen() {
           {/* Research Details Action Button */}
           <TouchableOpacity
             style={[styles.detailBtn, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card, borderColor: isDark ? c.primary + '30' : 'rgba(0, 0, 0, 0.05)' }]}
-            onPress={() => (router as any).push('/research-details')}
+            onPress={() => router.push('/research-details' as any)}
             activeOpacity={0.85}
           >
             <View style={[styles.detailBtnIcon, { backgroundColor: c.primaryLight }]}>

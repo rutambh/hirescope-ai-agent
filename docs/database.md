@@ -26,7 +26,7 @@ All persistent data lives on the device via **AsyncStorage** (key-value store), 
 Each `SearchRecord` contains:
 - `id` — UUID
 - `timestamp` — ISO date string
-- `filters` — the 5 search filters used (`SearchFilters`)
+- `filters` — the search filters used (`SearchFilters`)
 - `results` — full `FinalResults` object (ratings, salaries, pros/cons, confidence, etc.)
 
 #### `aiModelStore` (key: `hirescope-ai-model-store`)
@@ -50,7 +50,7 @@ Holds the active search state (phase, progress, raw data points, scraper URL) an
 
 All type definitions live in [`src/types/index.ts`](../src/types/index.ts):
 
-- `SearchFilters` — country, company, role, experience, salary, currency info
+- `SearchFilters` — company, role, experience, salary, currency info (country hardcoded to India)
 - `RawDataPoint` — one scraped page's raw text + metadata
 - `StructuredRecord` — extracted rating, salaries, pros, cons, snippets from one page
 - `ThemeFrequency` — canonical theme label + occurrence count

@@ -4,20 +4,25 @@ import { SearchFilters, RawDataPoint, FinalResults } from '../types';
 
 type SearchPhase = 'idle' | 'searching' | 'extracting' | 'ai-extract' | 'ai-enhance' | 'complete' | 'error';
 
+type ActiveSearch = {
+  id: string;
+  filters: SearchFilters;
+  phase: SearchPhase;
+  progressPercent: number;
+  estimatedSecondsRemaining: number;
+  urlsDiscovered: number;
+  urlsProcessed: number;
+  rawDataPoints: RawDataPoint[];
+  scraperUrl: string | null;
+};
+
 type SearchState = {
   // Viewer state (for displaying results on the results screen)
   filters: SearchFilters | null;
   finalResults: FinalResults | null;
 
-  // Active background search state
-  activeFilters: SearchFilters | null;
-  activePhase: SearchPhase;
-  activeProgressPercent: number;
-  activeEstimatedSecondsRemaining: number;
-  activeUrlsDiscovered: number;
-  activeUrlsProcessed: number;
-  activeRawDataPoints: RawDataPoint[];
-  activeScraperUrl: string | null;
+  // Active background searches (up to 2 concurrent)
+  activeSearches: ActiveSearch[];
 
   // Setters/actions for viewer state
   setFilters: (filters: SearchFilters | null) => void;
@@ -26,43 +31,28 @@ type SearchState = {
   resetViewer: () => void;
 
   // Setters/actions for active search state
-  setActiveFilters: (filters: SearchFilters | null) => void;
-  startSearch: () => void;
-  addActiveRawDataPoint: (point: RawDataPoint) => void;
-  setActivePhase: (phase: SearchPhase) => void;
-  setActiveProgress: (percent: number) => void;
-  setActiveEstimatedSecondsRemaining: (seconds: number) => void;
-  setActiveUrlsDiscovered: (count: number) => void;
-  setActiveUrlsProcessed: (count: number) => void;
-  setActiveScraperUrl: (url: string | null) => void;
-  cancelSearch: () => void;
-  reset: () => void;
+  addActiveSearch: (id: string, filters: SearchFilters) => void;
+  removeActiveSearch: (id: string) => void;
+  updateActiveSearch: (id: string, updates: Partial<Omit<ActiveSearch, 'id' | 'filters'>>) => void;
+  getActiveSearch: (id: string) => ActiveSearch | undefined;
+  canStartNewSearch: () => boolean;
+  getActiveSearchCount: () => number;
 };
 
-export const useSearchStore = create<SearchState>((set) => ({
+export const useSearchStore = create<SearchState>((set, get) => ({
   // Viewer state defaults
   filters: null,
   finalResults: null,
 
   // Active search state defaults
-  activeFilters: null,
-  activePhase: 'idle',
-  activeProgressPercent: 0,
-  activeEstimatedSecondsRemaining: 0,
-  activeUrlsDiscovered: 0,
-  activeUrlsProcessed: 0,
-  activeRawDataPoints: [],
-  activeScraperUrl: null,
+  activeSearches: [],
 
   // Viewer setters
   setFilters: (filters) => set({ filters }),
   setFinalResults: (finalResults) => set({ finalResults }),
   completeSearch: (finalResults) => set((state) => ({
     finalResults,
-    // When final results are set, load the corresponding active search filters for viewing
-    filters: state.activeFilters,
-    activePhase: 'complete',
-    activeProgressPercent: 100,
+    filters: state.activeSearches[0]?.filters ?? null,
   })),
   resetViewer: () => set({
     filters: null,
@@ -70,49 +60,36 @@ export const useSearchStore = create<SearchState>((set) => ({
   }),
 
   // Active search setters
-  setActiveFilters: (activeFilters) => set({ activeFilters }),
-
-  startSearch: () => set({
-    activePhase: 'searching',
-    activeProgressPercent: 0,
-    activeEstimatedSecondsRemaining: 15 * 60,
-    activeUrlsDiscovered: 0,
-    activeUrlsProcessed: 0,
-    activeRawDataPoints: [],
-    activeScraperUrl: null,
-  }),
-
-  addActiveRawDataPoint: (point) => set((state) => ({
-    activeRawDataPoints: [...state.activeRawDataPoints, point],
+  addActiveSearch: (id, filters) => set((state) => ({
+    activeSearches: [
+      ...state.activeSearches,
+      {
+        id,
+        filters,
+        phase: 'searching',
+        progressPercent: 0,
+        estimatedSecondsRemaining: 15 * 60,
+        urlsDiscovered: 0,
+        urlsProcessed: 0,
+        rawDataPoints: [],
+        scraperUrl: null,
+      },
+    ],
   })),
 
-  setActivePhase: (activePhase) => set({ activePhase }),
-  setActiveProgress: (activeProgressPercent) => set({ activeProgressPercent }),
-  setActiveEstimatedSecondsRemaining: (activeEstimatedSecondsRemaining) => set({ activeEstimatedSecondsRemaining }),
-  setActiveUrlsDiscovered: (activeUrlsDiscovered) => set({ activeUrlsDiscovered }),
-  setActiveUrlsProcessed: (activeUrlsProcessed) => set({ activeUrlsProcessed }),
-  setActiveScraperUrl: (activeScraperUrl) => set({ activeScraperUrl }),
+  removeActiveSearch: (id) => set((state) => ({
+    activeSearches: state.activeSearches.filter((s) => s.id !== id),
+  })),
 
-  cancelSearch: () => set({
-    activePhase: 'idle',
-    activeProgressPercent: 0,
-    activeEstimatedSecondsRemaining: 0,
-    activeUrlsDiscovered: 0,
-    activeUrlsProcessed: 0,
-    activeRawDataPoints: [],
-    activeScraperUrl: null,
-  }),
+  updateActiveSearch: (id, updates) => set((state) => ({
+    activeSearches: state.activeSearches.map((s) =>
+      s.id === id ? { ...s, ...updates } : s
+    ),
+  })),
 
-  reset: () => set({
-    filters: null,
-    finalResults: null,
-    activeFilters: null,
-    activePhase: 'idle',
-    activeProgressPercent: 0,
-    activeEstimatedSecondsRemaining: 0,
-    activeUrlsDiscovered: 0,
-    activeUrlsProcessed: 0,
-    activeRawDataPoints: [],
-    activeScraperUrl: null,
-  }),
+  getActiveSearch: (id) => get().activeSearches.find((s) => s.id === id),
+
+  canStartNewSearch: () => get().activeSearches.length < 1,
+
+  getActiveSearchCount: () => get().activeSearches.length,
 }));

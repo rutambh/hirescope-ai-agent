@@ -6,6 +6,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useNotification } from '../src/hooks/useNotification';
 import { useAppStore } from '../src/store/appStore';
 import { BackgroundScraper } from '../src/components/BackgroundScraper';
+import { AiDownloadPrompt } from '../src/components/AiDownloadPrompt';
+import { useAiDownloadNotification } from '../src/hooks/useAiDownloadNotification';
 import { LightColors, DarkColors } from '../src/constants/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -25,6 +27,7 @@ if (globalAny.ErrorUtils) {
 
 export default function RootLayout() {
   useNotification();
+  useAiDownloadNotification();
   const theme = useAppStore((state) => state.theme);
   const systemColorScheme = useColorScheme();
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
@@ -48,6 +51,7 @@ export default function RootLayout() {
         <Stack.Screen name="results" options={{ animation: 'slide_from_right' }} />
       </Stack>
       <BackgroundScraper />
+      <AiDownloadPrompt />
     </>
   );
 }

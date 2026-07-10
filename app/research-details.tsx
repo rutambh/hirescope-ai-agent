@@ -19,19 +19,19 @@ export default function ResearchDetailsScreen() {
   const c = isDark ? DarkColors : LightColors;
 
   const isLive = live === 'true';
+  const activeSearches = searchStore.activeSearches;
+  const latestActive = activeSearches[activeSearches.length - 1];
 
   const {
-    activeFilters, activePhase, activeRawDataPoints,
-    activeUrlsDiscovered, activeUrlsProcessed,
     filters: completedFilters, finalResults,
   } = searchStore;
 
-  const filters = isLive ? activeFilters : completedFilters;
+  const filters = isLive ? latestActive?.filters ?? null : completedFilters;
   const rawUrls = isLive
-    ? activeRawDataPoints.filter(p => p.success).map(p => p.source)
+    ? latestActive?.rawDataPoints?.filter(p => p.success).map(p => p.source) ?? []
     : (finalResults?.rawUrls ?? []);
   const pagesCount = isLive
-    ? `${activeUrlsProcessed}/${activeUrlsDiscovered}`
+    ? `${latestActive?.urlsProcessed ?? 0}/${latestActive?.urlsDiscovered ?? 0}`
     : String(rawUrls.length);
 
   const phaseLabel: Record<string, string> = {
@@ -39,6 +39,8 @@ export default function ResearchDetailsScreen() {
     'ai-extract': 'AI analyzing pages', 'ai-enhance': 'AI writing summary',
     complete: 'Complete', error: 'Error',
   };
+
+  const activePhase = latestActive?.phase ?? 'idle';
 
   return (
     <View style={[styles.root, { backgroundColor: c.bg }]}>
@@ -76,7 +78,7 @@ export default function ResearchDetailsScreen() {
           </View>
 
           {/* ── Scraped Pages ── */}
-          <Text style={[styles.sectionLabel, { color: c.textMuted }]}>Scraped Pages ({rawUrls.length})</Text>
+          <Text style={[styles.sectionLabel, { color: c.textMuted }]}>Searched Pages ({rawUrls.length})</Text>
           <View style={[styles.urlList, { backgroundColor: c.card, borderColor: c.border }]}>
             {rawUrls.length === 0 ? (
               <Text style={[styles.emptyText, { color: c.textMuted }]}>No URLs yet</Text>

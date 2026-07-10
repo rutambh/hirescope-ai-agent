@@ -21,7 +21,17 @@ export function SalaryInput({ label, value, country, icon, onChange }: Props) {
 
   const symbol = country ? country.currencySymbol : '';
   const suffix = country ? country.salaryFormat : '';
-  const placeholder = country?.placeholder || '0';
+  const placeholder = '7';
+
+  const handleChange = (text: string) => {
+    const filtered = text.replace(/[^0-9.]/g, '');
+    const parts = filtered.split('.');
+    if (parts.length > 2) return;
+    if (parts[0].length > 2) return;
+    const num = parseFloat(filtered);
+    if (!isNaN(num) && num > 99.9) return;
+    onChange(filtered);
+  };
 
   return (
     <View style={styles.container}>
@@ -29,15 +39,15 @@ export function SalaryInput({ label, value, country, icon, onChange }: Props) {
         <Ionicons name={(icon || 'cash-outline') as any} size={13} color={c.textMuted} />
         <Text style={[styles.label, { color: c.textSecondary }]}>{label}</Text>
       </View>
-      <View style={[styles.inputRow, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
+      <View style={[styles.inputRow, { backgroundColor: c.surfaceAlt, borderColor: c.primary + '30' }]}>
         {symbol ? <Text style={[styles.symbol, { color: c.textMuted }]}>{symbol}</Text> : null}
         <TextInput
           style={[styles.input, { color: c.text }]}
           placeholder={placeholder}
-          placeholderTextColor={c.text + '40'}
+          placeholderTextColor={c.textMuted}
           keyboardType="numeric"
           value={value}
-          onChangeText={onChange}
+          onChangeText={handleChange}
         />
         {suffix ? (
           <View style={[styles.badge, { backgroundColor: c.primaryLight, borderColor: c.primary + '30' }]}>

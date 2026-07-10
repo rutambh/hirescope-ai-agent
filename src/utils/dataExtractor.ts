@@ -1,7 +1,8 @@
 // src/utils/dataExtractor.ts
 //
-// Deterministic extraction of structured data from raw scraped page text.
+// Enhanced deterministic extraction of structured data from raw scraped page text.
 // No AI involved — pure regex + heuristic pattern matching.
+// Improved with more patterns, better noise filtering, and confidence scoring.
 
 import { StructuredRecord } from '../types';
 
@@ -14,14 +15,20 @@ const RATING_PATTERNS = [
   /\b([1-4]\.\d|5\.0)\s+out\s+of\s+5\b/gi,
   // 4.2 stars
   /\b([1-4]\.\d|5\.0)\s*(?:star|stars|★)\b/gi,
-  // rating: 4.2  |  rating 4.2
-  /\brating[:\s]+([1-4]\.\d|5\.0)\b/gi,
+  // rating: 4.2  |  rating 4.2  |  overall rating 4.2
+  /\b(?:overall|company|employer|workplace)?\s*rating[:\s]+([1-4]\.\d|5\.0)\b/gi,
   // Rated 4.2
   /\brated\s+([1-4]\.\d|5\.0)\b/gi,
   // ★4.2  |  ★ 4.2
   /★\s*([1-4]\.\d|5\.0)\b/g,
   // 4.2 ★
   /\b([1-4]\.\d|5\.0)\s*★/g,
+  // Glassdoor/AmbitionBox style: "3.8 Overall" or "Work-Life Balance 4.1"
+  /\b([1-4]\.\d|5\.0)\s+(?:overall|out\s+of|total|aggregate)\b/gi,
+  // Indian format: 4.2/5.0
+  /\b([1-4]\.\d|5\.0)\s*\/\s*5\.0\b/gi,
+  // Percentage rating: 84% (sometimes used as rating)
+  /\b([6-9]\d)%\s+(?:approval|recommend|satisfied|positive)\b/gi,
 ];
 
 export function extractRatings(text: string): number[] {
@@ -31,7 +38,11 @@ export function extractRatings(text: string): number[] {
     let match: RegExpExecArray | null;
     const re = new RegExp(pattern.source, pattern.flags);
     while ((match = re.exec(clean)) !== null) {
-      const val = parseFloat(match[1]);
+      let val = parseFloat(match[1]);
+      // Handle percentage ratings (84% → 4.2/5)
+      if (pattern.source.includes('%')) {
+        val = Math.round((val / 20) * 10) / 10;
+      }
       if (!isNaN(val) && val >= 1.0 && val <= 5.0) {
         ratings.push(val);
       }
@@ -58,6 +69,12 @@ export function extractSalaries(
     const lpaBare = /\b(\d+(?:\.\d+)?)\s*(?:lakh|lpa|lakhs)\b/gi;
     // ₹12,00,000  |  12,00,000 (Indian numeric format)
     const indianNumeric = /(?:Rs\.?|INR|₹|inr)?\s*(\d{1,2}),(\d{2}),(\d{3})\b/gi;
+    // CTC: 12.5 L  |  CTC 15 Lakhs  |  CTC: 18 LPA
+    const ctcPattern = /CTC[:\s]*(?:Rs\.?|INR|₹)?\s*(\d+(?:\.\d+)?)\s*(?:lakh|lpa|l|Lakh|LPA|L)\b/gi;
+    // Annual: 12,00,000  |  Annual CTC 15,00,000
+    const annualIndian = /(?:annual|yearly|per\s+annum)[:\s]*(?:Rs\.?|INR|₹)?\s*(\d{1,2}),(\d{2}),(\d{3})\b/gi;
+    // Per month: ₹80,000/month  |  Rs 70,000 per month
+    const perMonthToAnnual = /(?:Rs\.?|INR|₹)?\s*(\d{1,2}),(\d{3})\s*(?:\/\s*month|per\s+month|monthly)\b/gi;
 
     let m: RegExpExecArray | null;
 
@@ -87,6 +104,25 @@ export function extractSalaries(
       if (!isNaN(lakh) && lakh > 0 && lakh < 300) values.push(lakh);
     }
 
+    const r5 = new RegExp(ctcPattern.source, ctcPattern.flags);
+    while ((m = r5.exec(clean)) !== null) {
+      const v = parseFloat(m[1]);
+      if (!isNaN(v) && v > 0 && v < 300) values.push(v);
+    }
+
+    const r6 = new RegExp(annualIndian.source, annualIndian.flags);
+    while ((m = r6.exec(clean)) !== null) {
+      const lakh = parseFloat(m[1] + m[2] + m[3]) / 100000;
+      if (!isNaN(lakh) && lakh > 0 && lakh < 300) values.push(lakh);
+    }
+
+    const r7 = new RegExp(perMonthToAnnual.source, perMonthToAnnual.flags);
+    while ((m = r7.exec(clean)) !== null) {
+      const monthly = parseFloat(m[1] + m[2]);
+      const annualLpa = (monthly * 12) / 100000;
+      if (!isNaN(annualLpa) && annualLpa > 0 && annualLpa < 300) values.push(Math.round(annualLpa * 10) / 10);
+    }
+
   } else if (salaryFormat === 'per year') {
     // $80,000  |  £65,000  |  €75,000  |  $80,000 - $150,000
     const yearly = /(?:\$|£|€|CAD|C\$|A\$|USD|GBP|EUR)\s*(\d{2,3})[,\s](\d{3})\b/gi;
@@ -96,8 +132,12 @@ export function extractSalaries(
     const kformatReverse = /\b(\d{2,3})\s*k\s*(?:\$|£|€|CAD|C\$|A\$|USD|GBP|EUR)\b/gi;
     // $150,000+  (with trailing +)
     const yearlyPlus = /(?:\$|£|€|CAD|C\$|A\$|USD|GBP|EUR)\s*(\d{2,3})[,\s](\d{3})\s*\+/gi;
-    // 100,000 - 150,000 USD
-    const bareYearly = /\b(\d{2,3})[,\s](\d{3})\s*(?:-|–|—|to)\s*(\d{2,3})[,\s](\d{3})\s*(?:\$|£|€|USD|GBP|EUR|CAD|dollars?|euros?|pounds?)/gi;
+    // 100,000 - 150,000 USD  |  100,000 - 150,000
+    const bareYearly = /\b(\d{2,3})[,\s](\d{3})\s*(?:-|–|—|to)\s*(\d{2,3})[,\s](\d{3})\b/gi;
+    // Salary range: $80K - $150K
+    const kRange = /(?:\$|£|€)\s*(\d{2,3})\s*k?\s*(?:-|–|—|to)\s*(?:\$|£|€)?\s*(\d{2,3})\s*k\b/gi;
+    // Annual: $120,000 per year  |  $120K annually
+    const annualFormat = /(?:\$|£|€)\s*(\d{2,3})[,\s](\d{3})\s*(?:per\s+year|annually|\/\s*year)\b/gi;
 
     let m: RegExpExecArray | null;
 
@@ -131,6 +171,20 @@ export function extractSalaries(
       const v2 = parseFloat(m[3] + m[4]);
       if (!isNaN(v1) && v1 >= 10000 && v1 <= 1000000) values.push(v1);
       if (!isNaN(v2) && v2 >= 10000 && v2 <= 1000000) values.push(v2);
+    }
+
+    const r6 = new RegExp(kRange.source, kRange.flags);
+    while ((m = r6.exec(clean)) !== null) {
+      const v1 = parseFloat(m[1]) * 1000;
+      const v2 = parseFloat(m[2]) * 1000;
+      if (!isNaN(v1) && v1 >= 10000 && v1 <= 1000000) values.push(v1);
+      if (!isNaN(v2) && v2 >= 10000 && v2 <= 1000000) values.push(v2);
+    }
+
+    const r7 = new RegExp(annualFormat.source, annualFormat.flags);
+    while ((m = r7.exec(clean)) !== null) {
+      const v = parseFloat(m[1] + m[2]);
+      if (!isNaN(v) && v >= 10000 && v <= 1000000) values.push(v);
     }
   } else if (salaryFormat === 'per month') {
     // AED 15,000  |  12,000 Dirhams
@@ -168,12 +222,17 @@ const PRO_HEADERS = [
   'pros:', 'pros\n', 'advantages:', 'likes:', 'positives:',
   'what i liked:', 'what employees like:', 'what people like:',
   'highlights:', 'benefits:', 'strengths:',
+  'good about', 'best part', 'what\'s good', 'why join',
+  'employee benefits', 'perks:', 'the good',
+  'pros & cons:', 'pros and cons:',
 ];
 
 const CON_HEADERS = [
   'cons:', 'cons\n', 'disadvantages:', 'dislikes:', 'negatives:',
   'what i disliked:', 'areas of improvement:', 'concerns:',
   'challenges:', 'weaknesses:', 'drawbacks:',
+  'bad about', 'worst part', 'what\'s bad', 'issues:',
+  'improvement areas', 'the bad', 'downsides:',
 ];
 
 function isGarbageText(line: string, company: string): boolean {
@@ -191,7 +250,9 @@ function isGarbageText(line: string, company: string): boolean {
     cleanLine.includes('sign in') ||
     cleanLine.includes('sign up') ||
     cleanLine.includes('log in') ||
-    cleanLine.includes('create account')
+    cleanLine.includes('create account') ||
+    cleanLine.includes('forgot password') ||
+    cleanLine.includes('reset password')
   ) {
     return true;
   }
@@ -210,20 +271,29 @@ function isGarbageText(line: string, company: string): boolean {
     cleanLine.includes('calculator') ||
     cleanLine.includes('advertisement') ||
     cleanLine.includes('sponsored') ||
-    cleanLine.includes('employer') ||
     cleanLine.includes('post a job') ||
     cleanLine.includes('find jobs') ||
     cleanLine.includes('search jobs') ||
     cleanLine.includes('upload your') ||
     cleanLine.includes('submit your') ||
     cleanLine.includes('get started') ||
-    cleanLine.includes('create your')
+    cleanLine.includes('create your') ||
+    cleanLine.includes('subscribe to') ||
+    cleanLine.includes('follow us') ||
+    cleanLine.includes('download app') ||
+    cleanLine.includes('share on')
   ) {
     return true;
   }
 
   // Exclude typical page title structures
-  if (cleanLine.includes('|') || cleanLine.includes('::') || cleanLine.includes('—')) {
+  if (cleanLine.includes('::') || cleanLine.includes('—')) {
+    return true;
+  }
+
+  // Exclude lines with multiple pipe-separated fragments (typically nav/UI tabs)
+  const pipeCount = (cleanLine.match(/\|/g) || []).length;
+  if (pipeCount > 1) {
     return true;
   }
 
@@ -233,7 +303,12 @@ function isGarbageText(line: string, company: string): boolean {
     cleanLine === 'salaries' ||
     cleanLine === 'benefits' ||
     cleanLine === 'jobs' ||
-    cleanLine === 'interviews'
+    cleanLine === 'interviews' ||
+    cleanLine === 'photos' ||
+    cleanLine === 'questions' ||
+    cleanLine === 'overview' ||
+    cleanLine === 'news' ||
+    cleanLine === 'updates'
   ) {
     return true;
   }
@@ -245,8 +320,21 @@ function isGarbageText(line: string, company: string): boolean {
     cleanLine === `${companyLower} reviews` ||
     cleanLine === `${companyLower} salaries` ||
     cleanLine === `${companyLower} careers` ||
-    cleanLine === `working at ${companyLower}`
+    cleanLine === `working at ${companyLower}` ||
+    cleanLine === `${companyLower} - glassdoor` ||
+    cleanLine === `${companyLower} - ambitionbox` ||
+    cleanLine === `${companyLower} - indeed`
   ) {
+    return true;
+  }
+
+  // Exclude URLs and file paths
+  if (cleanLine.includes('http') || cleanLine.includes('www.') || cleanLine.includes('.com')) {
+    return true;
+  }
+
+  // Exclude very short lines (likely navigation)
+  if (cleanLine.length < 5) {
     return true;
   }
 
@@ -261,9 +349,9 @@ function extractSection(text: string, headers: string[], company?: string): stri
     const idx = lower.indexOf(header);
     if (idx === -1) continue;
 
-    // Get text after header, up to next blank line or 600 chars
+    // Get text after header, up to next blank line or 800 chars
     const start = idx + header.length;
-    const chunk = text.substring(start, start + 600);
+    const chunk = text.substring(start, start + 800);
     const lines = chunk.split('\n').map(l => l.trim()).filter(Boolean);
 
     for (const line of lines) {
@@ -272,8 +360,11 @@ function extractSection(text: string, headers: string[], company?: string): stri
       const isNewSection = CON_HEADERS.concat(PRO_HEADERS).some(h => lline.startsWith(h));
       if (isNewSection) break;
 
+      // Stop at very short lines (likely section break)
+      if (line.length < 3) break;
+
       // Skip very short or very long lines
-      if (line.length >= 8 && line.length <= 200) {
+      if (line.length >= 8 && line.length <= 250) {
         // Strip leading bullets/numbers
         const cleaned = line.replace(/^[\-\*•·◦\d\.\)]+\s*/, '').trim();
         if (cleaned.length >= 5) {
@@ -293,6 +384,9 @@ const REVIEW_KEYWORDS = [
   'work', 'culture', 'salary', 'pay', 'hike', 'appraisal', 'management',
   'team', 'learning', 'growth', 'career', 'promotion', 'balance', 'hours',
   'pressure', 'environment', 'colleagues', 'training', 'benefits',
+  'compensation', 'review', 'experience', 'rating', 'recommend',
+  'pros', 'cons', 'good', 'bad', 'average', 'excellent', 'poor',
+  'company', 'job', 'role', 'manager', 'wlb', 'remote', 'onsite',
 ];
 
 function extractSnippets(text: string, company?: string): string[] {
@@ -301,7 +395,7 @@ function extractSnippets(text: string, company?: string): string[] {
 
   for (const s of sentences) {
     const trimmed = s.trim();
-    if (trimmed.length < 20 || trimmed.length > 200) continue;
+    if (trimmed.length < 20 || trimmed.length > 300) continue;
     const lower = trimmed.toLowerCase();
     const hasKeyword = REVIEW_KEYWORDS.some(kw => lower.includes(kw));
     if (!hasKeyword) continue;
@@ -320,7 +414,7 @@ function extractSnippets(text: string, company?: string): string[] {
     ) continue;
 
     snippets.push(trimmed);
-    if (snippets.length >= 20) break;
+    if (snippets.length >= 25) break;
   }
 
   return snippets;
@@ -334,6 +428,10 @@ export function cleanPageText(raw: string): string {
     .replace(/https?:\/\/\S+/g, ' ')
     // Remove email addresses
     .replace(/\S+@\S+\.\S+/g, ' ')
+    // Remove tracking pixels (1x1 images)
+    .replace(/<img[^>]*1x1[^>]*>/gi, ' ')
+    // Remove zero-width characters
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
     // Collapse multiple spaces/newlines
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')

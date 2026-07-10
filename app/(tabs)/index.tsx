@@ -1,76 +1,71 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, Alert, useColorScheme, Image,
+  KeyboardAvoidingView, Platform, useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSearchStore } from '../../src/store/searchStore';
-import { COUNTRIES, CountryConfig } from '../../src/constants/countries';
-import { FilterDropdown } from '../../src/components/FilterDropdown';
+import { INDIA } from '../../src/constants/countries';
 import { ExperienceSlider } from '../../src/components/ExperienceSlider';
 import { SalaryInput } from '../../src/components/SalaryInput';
 import { useAppStore } from '../../src/store/appStore';
 import { useAIModelStore } from '../../src/store/aiModelStore';
-import { useScraper } from '../../src/hooks/useScraper';
 import { LightColors, DarkColors, Spacing, Radius } from '../../src/constants/theme';
+import { ThemedConfirm } from '../../src/components/ThemedConfirm';
 
 export default function SearchScreen() {
   const router = useRouter();
-  const setStoreFilters = useSearchStore((s) => s.setActiveFilters);
-  const startSearch = useSearchStore((s) => s.startSearch);
   const searchStore = useSearchStore();
-  const scraper = useScraper();
   const { theme } = useAppStore();
   const { status: aiStatus } = useAIModelStore();
   const systemColorScheme = useColorScheme();
 
-  const [selectedCountry, setSelectedCountry] = useState<CountryConfig | null>(null);
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
   const [experience, setExperience] = useState(5);
   const [salary, setSalary] = useState('');
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [invalidSalaryVisible, setInvalidSalaryVisible] = useState(false);
 
-  const phase = searchStore.activePhase;
-  const isResearching = phase === 'searching' || phase === 'extracting';
+  const activeSearches = searchStore.activeSearches;
+  const isResearching = activeSearches.length > 0;
 
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
   const c = isDark ? DarkColors : LightColors;
 
   const isFormValid =
-    selectedCountry !== null &&
     company.trim().length >= 2 &&
     role.trim().length >= 2 &&
     salary.trim().length > 0;
 
   const handleStart = () => {
-    if (!isFormValid || !selectedCountry) return;
+    if (!isFormValid) return;
     const numericSalary = parseFloat(salary);
     if (isNaN(numericSalary) || numericSalary <= 0) {
-      Alert.alert('Invalid Salary', 'Enter a positive number.');
+      setInvalidSalaryVisible(true);
       return;
     }
-    setStoreFilters({
-      country: selectedCountry.name,
-      countryCode: selectedCountry.code,
+
+    if (!searchStore.canStartNewSearch()) {
+      setShowLimitModal(true);
+      return;
+    }
+
+    const searchId = Date.now().toString();
+    searchStore.addActiveSearch(searchId, {
+      country: INDIA.name,
+      countryCode: INDIA.code,
       company: company.trim(),
       role: role.trim(),
       experience,
       currentSalary: numericSalary,
-      currency: selectedCountry.currency,
-      currencyCode: selectedCountry.currencyCode,
-      salaryFormat: selectedCountry.salaryFormat,
+      currency: INDIA.currency,
+      currencyCode: INDIA.currencyCode,
+      salaryFormat: INDIA.salaryFormat,
     });
-    startSearch();
     router.replace('/(tabs)/history');
-  };
-
-  const handleStop = () => {
-    Alert.alert('Stop Research', 'Cancel and lose all progress?', [
-      { text: 'Continue', style: 'default' },
-      { text: 'Stop', style: 'destructive', onPress: () => scraper.handleCancel() },
-    ]);
   };
 
   return (
@@ -91,22 +86,19 @@ export default function SearchScreen() {
             keyboardShouldPersistTaps="handled"
           >
             {/* Position Card */}
-            <View style={[styles.card, { 
-              backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card, 
-              borderColor: isDark ? c.border : 'transparent',
-              shadowColor: isDark ? '#000' : c.primary,
-              shadowOpacity: isDark ? 0.25 : 0.06,
+            <View style={[styles.card, {
+              backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.surface,
             }]}>
               <Text style={[styles.groupTitle, { color: c.primary }]}>POSITION</Text>
 
               <View style={styles.field}>
                 <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Company</Text>
-                <View style={[styles.inputShell, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
+                <View style={[styles.inputShell, { backgroundColor: isDark ? c.surfaceAlt : c.bg, borderColor: c.primary + '30', borderWidth: 1 }]}>
                   <Ionicons name="business-outline" size={18} color={c.primary} style={{ marginRight: 10 }} />
                   <TextInput
                     style={[styles.input, { color: c.text }]}
                     placeholder="e.g. Google"
-                    placeholderTextColor={c.text + '40'}
+                    placeholderTextColor={c.textMuted}
                     value={company}
                     onChangeText={setCompany}
                     autoCapitalize="words"
@@ -122,12 +114,12 @@ export default function SearchScreen() {
 
               <View style={styles.field}>
                 <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Role or Title</Text>
-                <View style={[styles.inputShell, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
+                <View style={[styles.inputShell, { backgroundColor: isDark ? c.surfaceAlt : c.bg, borderColor: c.primary + '30', borderWidth: 1 }]}>
                   <Ionicons name="briefcase-outline" size={18} color={c.primary} style={{ marginRight: 10 }} />
                   <TextInput
                     style={[styles.input, { color: c.text }]}
                     placeholder="e.g. Product Designer"
-                    placeholderTextColor={c.text + '40'}
+                    placeholderTextColor={c.textMuted}
                     value={role}
                     onChangeText={setRole}
                     autoCapitalize="words"
@@ -141,26 +133,11 @@ export default function SearchScreen() {
                 </View>
               </View>
 
-              <View style={styles.field}>
-                <FilterDropdown
-                  label="Country"
-                  icon="globe-outline"
-                  selectedValue={selectedCountry?.name || ''}
-                  options={COUNTRIES}
-                  onSelect={(country) => {
-                    setSelectedCountry(country);
-                    setSalary('');
-                  }}
-                />
-              </View>
             </View>
 
             {/* Requirements Card */}
-            <View style={[styles.card, { 
-              backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card, 
-              borderColor: isDark ? c.border : 'transparent',
-              shadowColor: isDark ? '#000' : c.primary,
-              shadowOpacity: isDark ? 0.25 : 0.06,
+            <View style={[styles.card, {
+              backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.surface,
             }]}>
               <Text style={[styles.groupTitle, { color: c.primary }]}>REQUIREMENTS</Text>
 
@@ -175,39 +152,30 @@ export default function SearchScreen() {
                 label="Current Salary"
                 icon="cash-outline"
                 value={salary}
-                country={selectedCountry}
+                country={INDIA}
                 onChange={setSalary}
               />
             </View>
 
             {/* Action Button */}
-            {isResearching ? (
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: c.dangerLight, borderColor: c.danger + '40' }]}
-                onPress={handleStop}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="stop-circle" size={20} color={c.danger} />
-                <Text style={[styles.actionBtnText, { color: c.danger }]}>Stop Research</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[
-                  styles.actionBtn,
-                  {
-                    backgroundColor: isFormValid ? c.primaryDark : c.surfaceAlt,
-                    borderColor: isFormValid ? c.primaryDark : c.border,
-                    shadowColor: isFormValid ? c.primaryDark : 'transparent',
-                  }
-                ]}
-                disabled={!isFormValid}
-                onPress={handleStart}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.actionBtnText, { color: isFormValid ? '#080716' : c.textMuted, fontWeight: '700' }]}>Start Research</Text>
-                <Ionicons name="arrow-forward-outline" size={18} color={isFormValid ? '#080716' : c.textMuted} />
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[
+                styles.actionBtn,
+                {
+                  backgroundColor: isFormValid ? c.primary : c.surfaceAlt,
+                  borderColor: isFormValid ? c.primary : c.border,
+                  shadowColor: isFormValid ? c.primary : 'transparent',
+                }
+              ]}
+              disabled={!isFormValid}
+              onPress={handleStart}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.actionBtnText, { color: isFormValid ? (isDark ? '#051424' : '#ffffff') : c.textMuted, fontWeight: '700' }]}>
+                {activeSearches.length >= 1 ? 'Limit Reached' : 'Start Research'}
+              </Text>
+              <Ionicons name={activeSearches.length >= 1 ? "lock-closed-outline" : "arrow-forward-outline"} size={18} color={isFormValid ? (isDark ? '#051424' : '#ffffff') : c.textMuted} />
+            </TouchableOpacity>
 
             
 
@@ -222,6 +190,25 @@ export default function SearchScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <ThemedConfirm
+        visible={showLimitModal}
+        title="Research Limit Reached"
+        message="A research is already in progress. Please wait for it to complete before starting a new one."
+        confirmLabel="Got it"
+        cancelLabel="Cancel"
+        onConfirm={() => setShowLimitModal(false)}
+        onCancel={() => setShowLimitModal(false)}
+      />
+
+      <ThemedConfirm
+        visible={invalidSalaryVisible}
+        title="Invalid Salary"
+        message="Enter a positive number."
+        confirmLabel="OK"
+        singleButton
+        onConfirm={() => setInvalidSalaryVisible(false)}
+      />
     </View>
   );
 }
@@ -257,13 +244,8 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 20,
-    borderWidth: 1,
     padding: Spacing.lg,
     marginBottom: Spacing.md,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
-    elevation: 6,
   },
   groupTitle: {
     fontSize: 12,

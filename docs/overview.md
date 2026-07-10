@@ -2,7 +2,7 @@
 
 ## What HireScope Is
 
-HireScope is a fully local, zero-server Android app that helps job seekers research company salaries, employee ratings, and sentiment before interviews. The user enters 5 filters (country, company, role, experience, current salary), and the app silently scrapes up to 50 web domains in the background using hidden WebViews, extracts structured data with regex/heuristic parsing, optionally enhances results with an on-device AI model, then delivers consolidated salary ranges, hike percentages, ratings, and pros/cons.
+HireScope is a fully local, zero-server Android app that helps job seekers research company salaries, employee ratings, and sentiment before interviews. The user enters 4 filters (company, role, experience, current salary) — country is hardcoded to India, and the app silently scrapes up to 50 web domains in the background using hidden WebViews, extracts structured data with regex/heuristic parsing, optionally enhances results with an on-device AI model, then delivers consolidated salary ranges, hike percentages, ratings, and pros/cons.
 
 ## Target User
 

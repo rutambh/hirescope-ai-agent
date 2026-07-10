@@ -9,38 +9,52 @@ export function buildExtractionPrompt(
 ): string {
   const location = filters.country;
 
-  return `You are a precise data extraction engine. Extract structured data from employee review pages about a company.
+  return `You are an expert data extraction engine specializing in employee reviews and compensation data. Your job is to extract structured information from scraped web pages about a company's work environment, pay, and culture.
 
+CONTEXT:
 Company: ${filters.company}
 Role: ${filters.role}
 Location: ${location}
 Salary Format: ${filters.salaryFormat}
 Current Salary: ${filters.currentSalary}
+Pages scraped: ${pageCount}
 
-Below are scraped text contents from ${pageCount} web pages. Extract ALL data points you can find.
+TASK:
+Analyze the ${pageCount} scraped web pages below. Extract every data point you can find — ratings, salary figures, pros, cons, and useful quotes. Be thorough and precise.
 
-Return ONLY valid JSON with this exact structure — no markdown, no explanation, no extra text:
+Return ONLY valid JSON — no markdown fences, no explanation, no extra text:
 {
   "rating": number | null,
   "salaryMin": number | null,
   "salaryMax": number | null,
   "pros": string[],
   "cons": string[],
-  "snippets": string[]
+  "snippets": string[],
+  "salarySources": number,
+  "ratingSources": number
 }
 
-RULES:
-- rating: company rating out of 5 (decimal, 1.0–5.0). null if not found.
-- salaryMin/salaryMax: salary in ${filters.salaryFormat} units as plain numbers. null if not found.
-  For LPA: e.g. 12 means 12 Lakhs Per Annum
-  For per year: e.g. 120000 means $120,000 per year
-  For per month: e.g. 15000 means 15,000 per month
-- pros: list of positive employee feedback themes (max 10 items, concise)
-- cons: list of negative employee feedback themes (max 10 items, concise)
-- snippets: useful factual sentences about pay, culture, or reviews (max 5)
-- NEVER make up data. If not found in text, use null or empty array.
-- Extract multiple salary values if you see ranges (e.g. "12-18 LPA" → salaryMin: 12, salaryMax: 18)
-- Extract ALL pros and cons you can find, not just the most obvious ones
+FIELD RULES:
+- rating: Overall company/employer rating out of 5 (decimal, e.g. 3.8, 4.2). null if not found. If you see multiple ratings (e.g. "3.8 overall, 4.1 for work-life balance"), use the overall/aggregate rating. If you see ratings from different sources, average them.
+- salaryMin/salaryMax: Market salary range for the role in ${filters.salaryFormat} units. null if not found.
+  LPA format: e.g. 12 means ₹12 Lakhs Per Annum. Convert "1.2 Cr" to 120 LPA. Convert "₹12,00,000" to 12 LPA.
+  Per year: e.g. 120000 means $120,000/year. Convert "120K" to 120000.
+  Per month: e.g. 15000 means 15,000/month.
+  If you see "12-18 LPA", set salaryMin: 12, salaryMax: 18.
+  If you see a single number like "15 LPA", set both salaryMin and salaryMax to 15.
+  IMPORTANT: Only include salary data that is specifically for the "${filters.role}" role or closely related roles. Ignore generic company-wide salary data.
+- pros: Positive employee feedback themes (max 10, each 3-8 words). Group similar sentiments. Examples: "Good work-life balance", "Strong learning culture", "Competitive pay".
+- cons: Negative employee feedback themes (max 10, each 3-8 words). Group similar sentiments. Examples: "Poor management", "Long working hours", "Limited growth".
+- snippets: Factual quotes or statements from reviews about pay, culture, or experience (max 5, each 10-50 words). Prefer direct statements like "Average salary for this role is 15 LPA" over vague ones.
+- salarySources: Count of pages that contained salary data for this role.
+- ratingSources: Count of pages that contained rating data.
+
+ABSOLUTE RULES:
+- NEVER fabricate data. If a field is not found in the text, use null or [].
+- Extract from ALL pages, not just the first few.
+- If salary data appears in different formats across pages, normalize to the requested format.
+- If pros/cons are listed as bullet points in the source, extract each as a separate item.
+- Prioritize data from well-known review sites (Glassdoor, AmbitionBox, Indeed, etc.) over generic content.
 
 SCRAPED TEXT:
 ${allText.substring(0, 28000)}`; // Stay within ~20K token limit
@@ -94,29 +108,38 @@ export function buildEnhancementInput(
 export function buildEnhancementPrompt(input: AIEnhancerInput): string {
   const location = input.country;
 
-  return `You are a professional career and salary research analyst.
-Write a detailed analysis of the research findings below in 5-7 sentences.
+  return `You are a senior career and compensation analyst. Write a professional, data-driven analysis of the research findings below.
 
-Structure your response in three paragraphs:
-1. Salary Assessment: Compare the market range to the user's current salary and comment on the hike potential.
-2. Company Rating & Reputation: What the rating suggests about employee satisfaction.
-3. Key Pros and Cons: Highlight the most important positives and negatives.
+Write exactly 3 paragraphs, 2-3 sentences each:
 
-Be factual. Use only the data provided. Do not add or infer information.
-Do not use bullet points or markdown. Plain paragraphs only.
+Paragraph 1 — Salary Assessment:
+Compare the market salary range to the user's current salary. Quantify the gap (e.g. "The market range of ₹12–18 LPA suggests a potential 20-50% hike from your current ₹12 LPA"). Mention if the user is above, at, or below market. Be specific with numbers.
 
-Data:
+Paragraph 2 — Company Reputation:
+Interpret the rating. A rating of 4.0+ suggests strong employee satisfaction. 3.0-3.9 is average. Below 3.0 indicates significant issues. Connect the rating to the pros and cons. Mention the most significant pros and cons.
+
+Paragraph 3 — Strategic Recommendation:
+Based on the salary gap, rating, and key pros/cons, give a brief actionable recommendation. Be honest — if the data suggests caution, say so. Include specific next steps the user should take.
+
+RULES:
+- Be factual. Use ONLY the data provided — do not fabricate or infer.
+- Use plain paragraphs. No bullet points, no markdown, no headers.
+- Write in professional, neutral tone.
+- If data is missing (e.g. no rating), acknowledge it briefly and move on.
+- Use specific numbers from the data, not vague phrases.
+
+DATA:
 Company: ${input.company}
 Role: ${input.role}
 Location: ${location}
 Experience: ${input.experience} years
 Current Salary: ${input.currentSalary}
 Rating: ${input.rating !== null ? `${input.rating}/5` : 'Not available'}
-Salary Range: ${input.salaryRange}
+Market Salary Range: ${input.salaryRange}
 Expected Hike: ${input.hikeRange}
 Confidence Level: ${input.confidence}
-Top Positives: ${input.topPros.join(', ')}
-Top Negatives: ${input.topCons.join(', ')}
+Key Strengths: ${input.topPros.join(', ') || 'None identified'}
+Key Concerns: ${input.topCons.join(', ') || 'None identified'}
 
 Analysis:`;
 }
@@ -130,6 +153,8 @@ export function parseExtractionJson(text: string): {
   pros: string[];
   cons: string[];
   snippets: string[];
+  salarySources?: number;
+  ratingSources?: number;
 } | null {
   try {
     // Strip markdown code fences if present
@@ -185,13 +210,17 @@ function normalizeExtraction(parsed: any): {
   pros: string[];
   cons: string[];
   snippets: string[];
+  salarySources?: number;
+  ratingSources?: number;
 } {
   return {
     rating: typeof parsed.rating === 'number' && parsed.rating >= 1 && parsed.rating <= 5 ? parsed.rating : null,
     salaryMin: typeof parsed.salaryMin === 'number' && parsed.salaryMin > 0 ? parsed.salaryMin : null,
     salaryMax: typeof parsed.salaryMax === 'number' && parsed.salaryMax > 0 ? parsed.salaryMax : null,
-    pros: Array.isArray(parsed.pros) ? parsed.pros.filter((p: any) => typeof p === 'string' && p.length > 3) : [],
-    cons: Array.isArray(parsed.cons) ? parsed.cons.filter((c: any) => typeof c === 'string' && c.length > 3) : [],
-    snippets: Array.isArray(parsed.snippets) ? parsed.snippets.filter((s: any) => typeof s === 'string' && s.length > 10) : [],
+    pros: Array.isArray(parsed.pros) ? parsed.pros.filter((p: any) => typeof p === 'string' && p.length > 3).slice(0, 10) : [],
+    cons: Array.isArray(parsed.cons) ? parsed.cons.filter((c: any) => typeof c === 'string' && c.length > 3).slice(0, 10) : [],
+    snippets: Array.isArray(parsed.snippets) ? parsed.snippets.filter((s: any) => typeof s === 'string' && s.length > 10).slice(0, 5) : [],
+    salarySources: typeof parsed.salarySources === 'number' ? parsed.salarySources : undefined,
+    ratingSources: typeof parsed.ratingSources === 'number' ? parsed.ratingSources : undefined,
   };
 }

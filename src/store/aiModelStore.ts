@@ -16,12 +16,15 @@ type AIModelStore = {
   installedVersion: string | null;
   // Persisted download resumable URI (for pause/resume)
   resumeUri: string | null;
+  // Whether the first-load download prompt has been dismissed
+  promptDismissed: boolean;
 
   setStatus: (status: AIModelStatus) => void;
   setProgress: (downloadedBytes: number, totalBytes: number, speedBytesPerSec: number) => void;
   setError: (message: string) => void;
   setInstalled: (version: string) => void;
   setResumeUri: (uri: string | null) => void;
+  dismissPrompt: () => void;
   resetDownload: () => void;
   resetAll: () => void;
 };
@@ -36,6 +39,7 @@ export const useAIModelStore = create<AIModelStore>()(
       errorMessage: null,
       installedVersion: null,
       resumeUri: null,
+      promptDismissed: false,
 
       setStatus: (status) => set({ status }),
 
@@ -54,6 +58,8 @@ export const useAIModelStore = create<AIModelStore>()(
         }),
 
       setResumeUri: (uri) => set({ resumeUri: uri }),
+
+      dismissPrompt: () => set({ promptDismissed: true }),
 
       resetDownload: () =>
         set({
@@ -86,6 +92,7 @@ export const useAIModelStore = create<AIModelStore>()(
         resumeUri: state.resumeUri,
         downloadedBytes: state.downloadedBytes,
         totalBytes: state.totalBytes,
+        promptDismissed: state.promptDismissed,
       }),
     }
   )

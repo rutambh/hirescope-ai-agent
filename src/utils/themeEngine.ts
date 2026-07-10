@@ -180,7 +180,10 @@ export function matchTheme(
 ): string | null {
   const lower = text.toLowerCase();
   for (const [keyword, theme] of themeMap) {
-    if (lower.includes(keyword)) {
+    // Use word boundary matching to avoid false positives (e.g. 'late' matching 'translate')
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escaped}`, 'i');
+    if (regex.test(lower)) {
       return theme;
     }
   }

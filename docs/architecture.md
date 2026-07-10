@@ -17,7 +17,7 @@
 │   │   ├── BackgroundScraper.tsx   # Hidden WebView manager (mounted globally)
 │   │   ├── ConfidenceCard.tsx      # Data confidence display (high/medium/low/minimal)
 │   │   ├── ExperienceSlider.tsx    # Custom horizontal slider (1–30 years)
-│   │   ├── FilterDropdown.tsx      # Searchable dropdown (country picker)
+│   │   ├── FilterDropdown.tsx      # [deprecated] Country picker — removed from UI
 │   │   ├── HistoryCard.tsx         # History list item with progress + cancel
 │   │   ├── ProgressBar.tsx         # Animated progress ring
 │   │   ├── ProsConsCard.tsx        # Pros/Cons themed list
