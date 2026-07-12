@@ -163,6 +163,20 @@ export function BackgroundScraper() {
         source={activeRequest ? { uri: activeRequest.url } : { html: '<html><body></body></html>' }}
         userAgent={APP_CONFIG.webViewUserAgent}
         style={{ width: 1, height: 1 }}
+        onLoadStart={(event) => {
+          const { url } = event.nativeEvent;
+          if (hasBlockedExtension(url)) {
+            logger.warn('BackgroundScraper WebView', `Aborting download URL via onLoadStart: ${url}`);
+            if (webViewRef.current) {
+              try {
+                webViewRef.current.stopLoading();
+              } catch (e) {
+                logger.error('BackgroundScraper WebView', 'Failed to stopLoading', e);
+              }
+            }
+            rejectActiveWebViewRequest({ reason: 'blocked_download', message: 'file download blocked via onLoadStart' });
+          }
+        }}
         onLoadEnd={handleLoadEnd}
         onMessage={handleMessage}
         javaScriptEnabled={true}
