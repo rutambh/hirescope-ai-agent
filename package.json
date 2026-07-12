@@ -27,7 +27,9 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@expo/config-plugins": "^54.0.4",
     "@types/react": "~19.1.10",
+    "patch-package": "^8.0.0",
     "typescript": "~5.9.2"
   },
   "scripts": {
@@ -36,7 +38,8 @@
     "ios": "expo run:ios",
     "build:local": "node scripts/bump-version.js && npx expo prebuild --platform android --no-install && cd android && gradlew bundleRelease",
     "prebuild": "npx expo prebuild --platform android --no-install",
-    "lint": "eslint . --ext .ts,.tsx"
+    "lint": "eslint . --ext .ts,.tsx",
+    "postinstall": "patch-package"
   },
   "private": true
 }

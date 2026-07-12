@@ -163,17 +163,6 @@ const CONS_THEME_MAP: Array<[string, string]> = [
 
 // ─── Clustering Engine ────────────────────────────────────────────────────────
 
-// Strings that indicate UI/navigation/call-to-action text (not real pros/cons)
-const GARBAGE_PATTERNS = [
-  'sign in', 'sign up', 'log in', 'create account', 'get started',
-  'employer', 'employers', 'post job', 'find jobs', 'upload resume',
-  'search jobs', 'browse jobs', 'apply now', 'submit your',
-  'for employers', 'for job seekers', ' resources',
-  'salary calculator', 'salary estimate', 'benchmark', 'explore',
-  ' cookie', 'privacy', 'terms of', 'all rights reserved',
-  '©', '™', '®',
-];
-
 export function matchTheme(
   text: string,
   themeMap: Array<[string, string]>
@@ -190,11 +179,6 @@ export function matchTheme(
   return null;
 }
 
-function isGarbageFallback(text: string): boolean {
-  const lower = text.toLowerCase();
-  return GARBAGE_PATTERNS.some(p => lower.includes(p));
-}
-
 export function clusterThemes(
   rawStrings: string[],
   themeMap: Array<[string, string]>
@@ -206,15 +190,10 @@ export function clusterThemes(
     const theme = matchTheme(raw, themeMap);
     if (theme) {
       counts.set(theme, (counts.get(theme) ?? 0) + 1);
-    } else {
-      // Skip fallback if the raw string looks like UI/nav garbage
-      if (isGarbageFallback(raw)) continue;
-      // Fallback: use a trimmed, normalized version of the first 60 chars
-      const fallback = raw.trim().substring(0, 60);
-      if (fallback.length >= 8) {
-        counts.set(fallback, (counts.get(fallback) ?? 0) + 1);
-      }
     }
+    // Unmatched strings are intentionally dropped. Surfacing raw extracted
+    // text as a "theme" produced random-looking pros/cons; only recognized
+    // canonical themes are shown.
   }
 
   return Array.from(counts.entries())

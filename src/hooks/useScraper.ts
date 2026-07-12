@@ -2,34 +2,41 @@ import { useRef, useCallback, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
 import { useSearchStore } from '../store/searchStore';
 import { useHistoryStore } from '../store/historyStore';
-import { useDomainScraper, cancelAllFetches } from './useDomainScraper';
+import { useDomainHealthStore } from '../store/domainHealthStore';
+import { useDomainScraper, setCancelFlag, isCancelled, resetCancelFlag } from './useDomainScraper';
 import { useNotification } from './useNotification';
 import { useAIModel } from './useAIModel';
 import { mergeAllResults } from '../utils/merger';
 import { APP_CONFIG } from '../constants/config';
 import { RawDataPoint, SearchRecord } from '../types';
 import { logger } from '../utils/logger';
+import {
+  startResearchService,
+  stopResearchService,
+  updateResearchNotification,
+} from '../native/researchService';
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Module-level cancel flag — shared across all hook instances
-let globalCancelFlag = false;
-
-export function setCancelFlag() {
-  globalCancelFlag = true;
-  cancelAllFetches();
-}
-
 export function useScraper() {
   const domainScraper = useDomainScraper();
-  const { triggerSearchCompleteNotification } = useNotification();
+  const { 
+    triggerSearchCompleteNotification,
+    triggerProgressNotification,
+    dismissProgressNotification
+  } = useNotification();
   const aiModel = useAIModel();
 
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
   const activeSearchIdRef = useRef<string | null>(null);
+
+  // Refs for tracking progress notification updates and throttling
+  const lastNotifiedProgressRef = useRef<number>(-1);
+  const lastNotifiedPhaseRef = useRef<string>('');
+  const lastNotifiedTimeRef = useRef<number>(0);
 
   useEffect(() => {
     return () => {
@@ -44,6 +51,10 @@ export function useScraper() {
     }
   }, []);
 
+  const dismissProgress = useCallback(async () => {
+    await dismissProgressNotification();
+  }, [dismissProgressNotification]);
+
   const handleCancel = useCallback(() => {
     setCancelFlag();
     cleanupIntervals();
@@ -52,16 +63,39 @@ export function useScraper() {
       store.updateActiveSearch(activeSearchIdRef.current, { phase: 'error' });
       activeSearchIdRef.current = null;
     }
-  }, [cleanupIntervals]);
+    stopResearchService();
+    dismissProgress();
+  }, [cleanupIntervals, dismissProgress]);
 
   const setWebViewRef = useCallback((_ref: any) => {
     domainScraper.setWebViewRef(_ref);
   }, [domainScraper]);
 
-  const isCancelled = useCallback((): boolean => {
-    if (globalCancelFlag) return true;
-    return false;
-  }, []);
+  const updateNotification = useCallback((phase: string, progress: number, statusText?: string) => {
+    const now = Date.now();
+    const latestSearch = useSearchStore.getState().activeSearches.find(s => s.id === activeSearchIdRef.current);
+    if (!latestSearch) return;
+
+    const { company, role } = latestSearch.filters;
+
+    const phaseChanged = phase !== lastNotifiedPhaseRef.current;
+    const progressChangedSignificant = Math.abs(progress - lastNotifiedProgressRef.current) >= 5;
+    const timePassedSignificant = now - lastNotifiedTimeRef.current >= 5000;
+
+    if (phaseChanged || progressChangedSignificant || timePassedSignificant) {
+      lastNotifiedPhaseRef.current = phase;
+      lastNotifiedProgressRef.current = progress;
+      lastNotifiedTimeRef.current = now;
+
+      triggerProgressNotification(company, role, phase, progress, statusText);
+
+      // Keep the foreground-service notification in sync with the phase so the
+      // user sees progress even while the app is backgrounded.
+      if (phaseChanged) {
+        updateResearchNotification('HireScope — researching', `${company}: ${phase}`);
+      }
+    }
+  }, [triggerProgressNotification]);
 
   const runScrape = useCallback(async () => {
     const searchStore = useSearchStore.getState();
@@ -75,8 +109,22 @@ export function useScraper() {
     activeSearchIdRef.current = searchId;
     const filters = latestSearch.filters;
 
-    globalCancelFlag = false;
+    // Reset notification tracker refs
+    lastNotifiedProgressRef.current = -1;
+    lastNotifiedPhaseRef.current = '';
+    lastNotifiedTimeRef.current = 0;
+
+    resetCancelFlag();
     logger.phase('start', `Researching ${filters.company} - ${filters.role} in ${filters.country}`);
+
+    // Keep the research process alive while the app is backgrounded so the
+    // hidden-WebView scrape can continue. No-op on platforms without the
+    // foreground service (and safe if the native module is missing).
+    startResearchService(
+      'HireScope — researching',
+      `Researching ${filters.company} (${filters.role})`
+    );
+
     startTimeRef.current = Date.now();
     const totalDurationMs = APP_CONFIG.totalTimeoutMs;
 
@@ -85,15 +133,22 @@ export function useScraper() {
       const elapsedMs = Date.now() - startTimeRef.current;
       const remainingSecs = Math.max(0, Math.floor((totalDurationMs - elapsedMs) / 1000));
       const progress = Math.min(90, Math.floor((elapsedMs / totalDurationMs) * 100));
+      
       useSearchStore.getState().updateActiveSearch(searchId, {
         estimatedSecondsRemaining: remainingSecs,
         progressPercent: progress,
       });
+
+      const currentSearch = useSearchStore.getState().activeSearches.find(s => s.id === searchId);
+      if (currentSearch) {
+        updateNotification(currentSearch.phase, progress);
+      }
     }, 1000);
 
     try {
       // ── Phase 1: URL Discovery ────────────────────────────────────────────
       useSearchStore.getState().updateActiveSearch(searchId, { phase: 'searching' });
+      updateNotification('searching', 0);
 
       const deadline = startTimeRef.current + APP_CONFIG.totalTimeoutMs;
 
@@ -113,11 +168,13 @@ export function useScraper() {
       if (isCancelled()) {
         cleanupIntervals();
         useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+        await dismissProgress();
         return;
       }
 
       // ── Phase 2: Page Scraping ────────────────────────────────────────────
       useSearchStore.getState().updateActiveSearch(searchId, { phase: 'extracting' });
+      updateNotification('extracting', 10);
 
       const maxDomains = useAppStore.getState().maxDomainsToScrape;
       const urlsToProcess = discoveredUrls.slice(0, maxDomains);
@@ -128,6 +185,7 @@ export function useScraper() {
         if (isCancelled()) {
           cleanupIntervals();
           useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+          await dismissProgress();
           return;
         }
         if (Date.now() >= deadline) {
@@ -145,6 +203,7 @@ export function useScraper() {
         if (isCancelled()) {
           cleanupIntervals();
           useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+          await dismissProgress();
           return;
         }
 
@@ -154,6 +213,7 @@ export function useScraper() {
           if (isCancelled()) {
             cleanupIntervals();
             useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+            await dismissProgress();
             return;
           }
           try {
@@ -165,6 +225,7 @@ export function useScraper() {
         if (isCancelled()) {
           cleanupIntervals();
           useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+          await dismissProgress();
           return;
         }
 
@@ -189,6 +250,10 @@ export function useScraper() {
         }
 
         useSearchStore.getState().updateActiveSearch(searchId, { urlsProcessed: i + 1 });
+        
+        const currentSearch = useSearchStore.getState().activeSearches.find(s => s.id === searchId);
+        const currentProgress = currentSearch?.progressPercent ?? 10;
+        updateNotification('extracting', currentProgress, `Scraping page ${i + 1} of ${urlsToProcess.length}`);
 
         // Random delay between pages to avoid rate limiting
         if (i < urlsToProcess.length - 1) {
@@ -201,12 +266,14 @@ export function useScraper() {
       if (isCancelled()) {
         cleanupIntervals();
         useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+        await dismissProgress();
         return;
       }
 
       // ── Phase 3: Data Extraction ──────────────────────────────────────────
       cleanupIntervals();
       useSearchStore.getState().updateActiveSearch(searchId, { progressPercent: 92 });
+      updateNotification('summary', 92, 'Extracting data');
 
       const elapsedSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
       const currentSearch = useSearchStore.getState().activeSearches.find(s => s.id === searchId);
@@ -221,6 +288,8 @@ export function useScraper() {
       if (aiAvailable) {
         logger.phase('ai-extract', 'Running SLM extraction on all pages');
         useSearchStore.getState().updateActiveSearch(searchId, { phase: 'ai-extract' });
+        updateNotification('ai-extract', 92);
+        
         const rawTexts = successPoints.map(p => p.rawText);
         const slmResult = await aiModel.extractFromPages(rawTexts, filters, deadline);
         if (slmResult) {
@@ -253,6 +322,8 @@ export function useScraper() {
       if (aiAvailable) {
         logger.phase('ai-enhance', 'Running AI enhancement summary');
         useSearchStore.getState().updateActiveSearch(searchId, { phase: 'ai-enhance' });
+        updateNotification('ai-enhance', 96);
+        
         try {
           const enhResult = await aiModel.runEnhancement(finalResults, filters, deadline);
           if (enhResult) {
@@ -286,18 +357,30 @@ export function useScraper() {
       console.log('useScraper: Scraping complete. Saving search record to history store for:', filters.company, '-', filters.role);
       useHistoryStore.getState().addSearch(record);
 
+      // Surface final results in the viewer store so the Results screen has data
+      useSearchStore.getState().completeSearch(finalResults);
+
+      // Increment domain health search counter (controls recency window for failure decay)
+      useDomainHealthStore.getState().incrementSearchCounter();
+
       // ── Cleanup: remove from active searches ────────────────────────────
       useSearchStore.getState().removeActiveSearch(searchId);
       activeSearchIdRef.current = null;
 
+      await dismissProgress();
       triggerSearchCompleteNotification(filters.company, filters.role, filters.country);
 
     } catch (err: any) {
       logger.error('Scraper', 'Fatal error', err);
       cleanupIntervals();
       useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
+      await dismissProgress();
+    } finally {
+      // Always tear down the foreground service when the research job ends,
+      // regardless of success / cancel / error path.
+      stopResearchService();
     }
-  }, [domainScraper, aiModel, cleanupIntervals, triggerSearchCompleteNotification, isCancelled]);
+  }, [domainScraper, aiModel, cleanupIntervals, triggerSearchCompleteNotification, isCancelled, updateNotification, dismissProgress]);
 
   return {
     runScrape,

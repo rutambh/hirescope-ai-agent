@@ -1,0 +1,180 @@
+diff --git a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
+index 5932fc1..86c0300 100644
+--- a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
++++ b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
+@@ -121,6 +121,16 @@ public class RNCWebView extends WebView implements LifecycleEventListener {
+         // do nothing
+     }
+ 
++    @Override
++    protected void onWindowVisibilityChanged(int visibility) {
++        super.onWindowVisibilityChanged(View.VISIBLE);
++    }
++
++    @Override
++    protected void onVisibilityChanged(@NonNull View changedView, int visibility) {
++        super.onVisibilityChanged(changedView, View.VISIBLE);
++    }
++
+     @Override
+     public void onHostDestroy() {
+         cleanupCallbacksAndDestroy();
+diff --git a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
+index 438ab6a..60ec1cf 100644
+--- a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
++++ b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
+@@ -22,6 +22,7 @@ import com.facebook.react.bridge.ReadableMap
+ import com.facebook.react.common.MapBuilder
+ import com.facebook.react.common.build.ReactBuildConfig
+ import com.facebook.react.uimanager.ThemedReactContext
++import com.reactnativecommunity.webview.events.TopFileDownloadEvent
+ import org.json.JSONException
+ import org.json.JSONObject
+ import java.io.UnsupportedEncodingException
+@@ -91,50 +92,14 @@ class RNCWebViewManagerImpl(private val newArch: Boolean = false) {
+         if (ReactBuildConfig.DEBUG) {
+             WebView.setWebContentsDebuggingEnabled(true)
+         }
+-        webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimetype, contentLength ->
++        // HireScope patch: do NOT enqueue to the system DownloadManager (that would
++        // download a binary the scraper never asked for). Instead emit onFileDownload
++        // (`topFileDownload`) so the JS layer fails the in-flight scrape fast and
++        // records a blocked_download. See patches/react-native-webview+*.patch.
++        webView.setDownloadListener(DownloadListener { url, _, _, _, _ ->
+             webView.setIgnoreErrFailedForThisURL(url)
+-            val module = webView.reactApplicationContext.getNativeModule(RNCWebViewModule::class.java) ?: return@DownloadListener
+-            val request: DownloadManager.Request = try {
+-                DownloadManager.Request(Uri.parse(url))
+-            } catch (e: IllegalArgumentException) {
+-                Log.w(TAG, "Unsupported URI, aborting download", e)
+-                return@DownloadListener
+-            }
+-            var fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
+-
+-            // Sanitize filename by replacing invalid characters with "_"
+-            fileName = fileName.replace(invalidCharRegex, "_")
+-
+-            val downloadMessage = "Downloading $fileName"
+-
+-            //Attempt to add cookie, if it exists
+-            var urlObj: URL? = null
+-            try {
+-                urlObj = URL(url)
+-                val baseUrl = urlObj.protocol + "://" + urlObj.host
+-                val cookie = CookieManager.getInstance().getCookie(baseUrl)
+-                request.addRequestHeader("Cookie", cookie)
+-            } catch (e: MalformedURLException) {
+-                Log.w(TAG, "Error getting cookie for DownloadManager", e)
+-            }
+-
+-            //Finish setting up request
+-            request.addRequestHeader("User-Agent", userAgent)
+-            request.setTitle(fileName)
+-            request.setDescription(downloadMessage)
+-            request.allowScanningByMediaScanner()
+-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+-            module.setDownloadRequest(request)
+-            if (module.grantFileDownloaderPermissions(
+-                    getDownloadingMessageOrDefault(),
+-                    getLackPermissionToDownloadMessageOrDefault()
+-                )
+-            ) {
+-                module.downloadFile(
+-                    getDownloadingMessageOrDefault()
+-                )
+-            }
++            val reactTag = RNCWebViewWrapper.getReactTagFromWebView(webView)
++            webView.dispatchEvent(webView, TopFileDownloadEvent(reactTag, url))
+         })
+         return RNCWebViewWrapper(context, webView)
+     }
+diff --git a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopFileDownloadEvent.kt b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopFileDownloadEvent.kt
+new file mode 100644
+index 0000000..5f5916a
+--- /dev/null
++++ b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopFileDownloadEvent.kt
+@@ -0,0 +1,33 @@
++package com.reactnativecommunity.webview.events
++
++import com.facebook.react.bridge.Arguments
++import com.facebook.react.bridge.WritableMap
++import com.facebook.react.uimanager.events.Event
++import com.facebook.react.uimanager.events.RCTEventEmitter
++
++/**
++ * Event emitted when the WebView triggers a file download (Content-Disposition:
++ * attachment / unrecognized binary). HireScope patches the DownloadListener to
++ * emit this instead of enqueuing to the system DownloadManager, so the JS layer
++ * can fail the in-flight scrape fast and record a blocked_download.
++ */
++class TopFileDownloadEvent(viewId: Int, downloadUrl: String) :
++    Event<TopFileDownloadEvent>(viewId) {
++  companion object {
++    const val EVENT_NAME = "topFileDownload"
++  }
++
++  private val mEventData: WritableMap = Arguments.createMap().apply {
++    putString("downloadUrl", downloadUrl)
++  }
++
++  override fun getEventName(): String = EVENT_NAME
++
++  override fun canCoalesce(): Boolean = false
++
++  override fun getCoalescingKey(): Short = 0
++
++  override fun dispatch(rctEventEmitter: RCTEventEmitter) {
++    rctEventEmitter.receiveEvent(viewTag, EVENT_NAME, mEventData)
++  }
++}
+diff --git a/node_modules/react-native-webview/src/WebView.android.tsx b/node_modules/react-native-webview/src/WebView.android.tsx
+index edf06fa..d69929a 100644
+--- a/node_modules/react-native-webview/src/WebView.android.tsx
++++ b/node_modules/react-native-webview/src/WebView.android.tsx
+@@ -88,6 +88,7 @@ const WebViewComponent = forwardRef<{}, AndroidWebViewProps>(
+       onRenderProcessGone: onRenderProcessGoneProp,
+       onMessage: onMessageProp,
+       onOpenWindow: onOpenWindowProp,
++      onFileDownload,
+       renderLoading,
+       renderError,
+       style,
+@@ -292,6 +293,8 @@ const WebViewComponent = forwardRef<{}, AndroidWebViewProps>(
+         onMessage={onMessage}
+         onOpenWindow={onOpenWindow}
+         hasOnOpenWindowEvent={onOpenWindowProp !== undefined}
++        onFileDownload={onFileDownload}
++        hasOnFileDownload={!!onFileDownload}
+         onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
+         ref={webViewRef}
+         // TODO: find a better way to type this.
+diff --git a/node_modules/react-native-webview/src/WebViewTypes.ts b/node_modules/react-native-webview/src/WebViewTypes.ts
+index c534d17..cc4096f 100644
+--- a/node_modules/react-native-webview/src/WebViewTypes.ts
++++ b/node_modules/react-native-webview/src/WebViewTypes.ts
+@@ -964,6 +964,24 @@ export interface AndroidWebViewProps extends WebViewSharedProps {
+    */
+   onOpenWindow?: (event: WebViewOpenWindowEvent) => void;
+ 
++  /**
++   * Function that is invoked when the WebView triggers a file download
++   * (e.g. a response with `Content-Disposition: attachment` or an
++   * unrecognized binary). HireScope relies on this to abort in-flight
++   * scrapes instead of letting the OS download manager save a file.
++   *
++   * @platform android
++   */
++  onFileDownload?: (event: FileDownloadEvent) => void;
++
++  /**
++   * Whether the `onFileDownload` handler is registered. Required so the
++   * native side actually dispatches the download event on Android.
++   *
++   * @platform android
++   */
++  hasOnFileDownload?: boolean;
++
+   /**
+    * https://developer.android.com/reference/android/webkit/WebSettings.html#setCacheMode(int)
+    * Set the cacheMode. Possible values are:

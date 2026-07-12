@@ -41,6 +41,7 @@ export default function ResearchDetailsScreen() {
   };
 
   const activePhase = latestActive?.phase ?? 'idle';
+  const isCompleted = finalResults !== null && (!isLive || !latestActive);
 
   return (
     <View style={[styles.root, { backgroundColor: c.bg }]}>
@@ -63,19 +64,31 @@ export default function ResearchDetailsScreen() {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* ── Status Bar ── */}
           <View style={[styles.statusBar, {
-            backgroundColor: isLive ? c.primaryLight : c.successLight,
-            borderColor: isLive ? c.primary + '30' : c.success + '30',
+            backgroundColor: isCompleted ? c.successLight : (isLive ? c.primaryLight : c.successLight),
+            borderColor: isCompleted ? c.success + '30' : (isLive ? c.primary + '30' : c.success + '30'),
           }]}>
-            {isLive && <View style={[styles.liveDot, { backgroundColor: c.success }]} />}
-            <Text style={[styles.statusText, { color: isLive ? c.primary : c.success }]}>
-              {isLive ? phaseLabel[activePhase] || activePhase : 'Research Complete'}
+            {!isCompleted && isLive && <View style={[styles.liveDot, { backgroundColor: c.success }]} />}
+            <Text style={[styles.statusText, { color: isCompleted ? c.success : (isLive ? c.primary : c.success) }]}>
+              {isCompleted ? 'Research Complete' : (isLive ? phaseLabel[activePhase] || activePhase : 'Research Complete')}
             </Text>
-            {isLive && (
+            {isLive && !isCompleted && (
               <View style={styles.statusStats}>
                 <Text style={[styles.statusStat, { color: c.textMuted }]}>{pagesCount} pages</Text>
               </View>
             )}
           </View>
+
+          {/* ── View Results CTA (visible once a completed research has results) ── */}
+          {finalResults && (
+            <TouchableOpacity
+              onPress={() => router.push('/results')}
+              style={[styles.viewResultsBtn, { backgroundColor: c.primary }]}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="bar-chart-outline" size={18} color="#ffffff" />
+              <Text style={[styles.viewResultsText, { color: '#ffffff' }]}>View Results</Text>
+            </TouchableOpacity>
+          )}
 
           {/* ── Scraped Pages ── */}
           <Text style={[styles.sectionLabel, { color: c.textMuted }]}>Searched Pages ({rawUrls.length})</Text>
@@ -120,6 +133,11 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 13, fontWeight: '700', flex: 1 },
   statusStats: { flexDirection: 'row', gap: Spacing.sm },
   statusStat: { fontSize: 11, fontWeight: '600' },
+  viewResultsBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderRadius: Radius.md, paddingVertical: Spacing.md, marginBottom: Spacing.lg,
+  },
+  viewResultsText: { fontSize: 15, fontWeight: '700' },
   sectionLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.sm },
   urlList: {
     borderRadius: Radius.md, padding: Spacing.lg, marginBottom: Spacing.lg, borderWidth: 1,

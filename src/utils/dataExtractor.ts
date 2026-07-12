@@ -603,44 +603,6 @@ export function isValidAISummary(text: string): boolean {
   return true;
 }
 
-function extractSection(text: string, headers: string[], company?: string): string[] {
-  const results: string[] = [];
-  const lower = text.toLowerCase();
-
-  for (const header of headers) {
-    const idx = lower.indexOf(header);
-    if (idx === -1) continue;
-
-    // Get text after header, up to next blank line or 800 chars
-    const start = idx + header.length;
-    const chunk = text.substring(start, start + 800);
-    const lines = chunk.split('\n').map(l => l.trim()).filter(Boolean);
-
-    for (const line of lines) {
-      // Stop at counter-section headers
-      const lline = line.toLowerCase();
-      const isNewSection = CON_HEADERS.concat(PRO_HEADERS).some(h => lline.startsWith(h));
-      if (isNewSection) break;
-
-      // Stop at very short lines (likely section break)
-      if (line.length < 3) break;
-
-      // Skip very short or very long lines
-      if (line.length >= 8 && line.length <= 250) {
-        // Strip leading bullets/numbers
-        const cleaned = line.replace(/^[\-\*•·◦\d\.\)]+\s*/, '').trim();
-        if (cleaned.length >= 5) {
-          if (company && isGarbageText(cleaned, company)) continue;
-          if (!isValidReviewSnippet(cleaned)) continue;
-          results.push(cleaned);
-        }
-      }
-    }
-  }
-
-  return results;
-}
-
 // ─── Snippet Extraction ───────────────────────────────────────────────────────
 
 const REVIEW_KEYWORDS = [
@@ -728,8 +690,95 @@ export function extractStructuredRecord(
       ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
       : null;
 
-  const pros = extractSection(text, PRO_HEADERS, company);
-  const cons = extractSection(text, CON_HEADERS, company);
+  // Smart line-by-line parsing for pros & cons
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const pros: string[] = [];
+  const cons: string[] = [];
+  
+  const PRO_HEADER_REGEX = /^(?:pros?|advantages?|likes?|positives?|what i liked|what employees like|highlights|strengths|perks|the good|good things|best parts?|why join)(?:[:\-\*•\s]|$)/i;
+  const CON_HEADER_REGEX = /^(?:cons?|disadvantages?|dislikes?|negatives?|what i disliked|areas? of improvement|concerns|challenges?|weaknesses|drawbacks|issues|improvement areas|the bad|downsides|bad parts?)(?:[:\-\*•\s]|$)/i;
+
+  let state: 'idle' | 'collecting_pros' | 'collecting_cons' = 'idle';
+  let itemsCollected = 0;
+
+  for (const line of lines) {
+    const lline = line.toLowerCase();
+    
+    // Check if line triggers a new section
+    if (PRO_HEADER_REGEX.test(line)) {
+      state = 'collecting_pros';
+      itemsCollected = 0;
+      
+      // If there is text after the header on the same line (e.g., "Pros: Great culture"), parse it
+      const headerMatch = line.match(PRO_HEADER_REGEX);
+      const remainingText = line.substring(headerMatch![0].length).trim();
+      if (remainingText.length >= 5) {
+        addPoint(remainingText, 'pros');
+      }
+      continue;
+    }
+    
+    if (CON_HEADER_REGEX.test(line)) {
+      state = 'collecting_cons';
+      itemsCollected = 0;
+      
+      // If there is text after the header on the same line, parse it
+      const headerMatch = line.match(CON_HEADER_REGEX);
+      const remainingText = line.substring(headerMatch![0].length).trim();
+      if (remainingText.length >= 5) {
+        addPoint(remainingText, 'cons');
+      }
+      continue;
+    }
+
+    // Stop collecting if we hit a major unrelated header or a very long paragraph
+    if (state !== 'idle') {
+      if (
+        lline.startsWith('about the company') ||
+        lline.startsWith('salary & benefits') ||
+        lline.startsWith('interview questions') ||
+        lline.startsWith('jobs at') ||
+        line.length > 300
+      ) {
+        state = 'idle';
+        continue;
+      }
+      
+      // Stop after collecting max 8 items per section to avoid run-away collection
+      if (itemsCollected >= 8) {
+        state = 'idle';
+        continue;
+      }
+      
+      // Clean and add line
+      addPoint(line, state === 'collecting_pros' ? 'pros' : 'cons');
+    }
+  }
+
+  function addPoint(rawPoint: string, type: 'pros' | 'cons') {
+    // Strip leading bullet characters
+    const cleaned = rawPoint.replace(/^[\-\*•·◦\d\.\)]+\s*/, '').trim();
+    if (cleaned.length < 5 || cleaned.length > 250) return;
+    if (company && isGarbageText(cleaned, company)) return;
+
+    // Split into sentences if it contains multiple sentences
+    const sentences = cleaned.split(/[.!?]\s+/).map(s => s.trim()).filter(Boolean);
+    for (const sentence of sentences) {
+      const cleanSentence = sentence;
+      if (cleanSentence.length >= 5) {
+        if (company && isGarbageText(cleanSentence, company)) continue;
+        if (!isValidReviewSnippet(cleanSentence)) continue;
+        
+        if (type === 'pros') {
+          pros.push(cleanSentence);
+        } else {
+          cons.push(cleanSentence);
+        }
+        itemsCollected++;
+      }
+    }
+  }
+
   const snippets = extractSnippets(text, company);
 
   return {

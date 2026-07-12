@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SearchRecord } from '../types';
-import { INDIA } from '../constants/countries';
+import { INDIA, getCountryByCode } from '../constants/countries';
 import { formatSalary } from '../utils/currency';
 import { useAppStore } from '../store/appStore';
 import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
@@ -20,7 +20,7 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
   const c = isDark ? DarkColors : LightColors;
 
-  const country = INDIA;
+  const country = getCountryByCode(filters.countryCode) ?? INDIA;
 
   const displayMin = results.salaryMin !== null ? results.salaryMin : 0;
   const displayMax = results.salaryMax !== null ? results.salaryMax : 0;
@@ -42,39 +42,41 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
   };
 
   return (
-    <TouchableOpacity
-      style={[styles.card, { backgroundColor: isDark ? 'rgba(30, 29, 52, 0.4)' : c.card, borderColor: c.border }]}
-      onPress={() => onView(record)}
-      activeOpacity={0.85}
-    >
-      <View style={styles.contentWrap}>
-        <View style={styles.textWrap}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.roleTitle, { color: c.text }]} numberOfLines={1}>
-              {filters.role}
-            </Text>
-          </View>
-          
-          <Text style={[styles.metaSub, { color: c.textSecondary }]}>
-            {filters.company} · {formatDate(timestamp)}
-          </Text>
-
-          <View style={styles.infoGrid}>
-            <View style={styles.infoItem}>
-              <Ionicons name="cash-outline" size={16} color={c.textSecondary} />
-              <Text style={[styles.infoVal, { color: c.textSecondary }]} numberOfLines={1}>
-                {formattedMax.split('/')[0]}
+    <View style={[styles.card, { backgroundColor: isDark ? 'rgba(30, 29, 52, 0.4)' : c.card, borderColor: c.border }]}>
+      <TouchableOpacity
+        style={styles.bodyPress}
+        onPress={() => onView(record)}
+        activeOpacity={0.85}
+      >
+        <View style={styles.contentWrap}>
+          <View style={styles.textWrap}>
+            <View style={styles.titleRow}>
+              <Text style={[styles.roleTitle, { color: c.text }]} numberOfLines={1}>
+                {filters.role}
               </Text>
             </View>
-            <View style={styles.infoItem}>
-              <Ionicons name="people-outline" size={16} color={c.textSecondary} />
-              <Text style={[styles.infoVal, { color: c.textSecondary }]}>
-                {results.sourcesCount || 0} Sources
-              </Text>
+            
+            <Text style={[styles.metaSub, { color: c.textSecondary }]}>
+              {filters.company} · {formatDate(timestamp)}
+            </Text>
+
+            <View style={styles.infoGrid}>
+              <View style={styles.infoItem}>
+                <Ionicons name="cash-outline" size={16} color={c.textSecondary} />
+                <Text style={[styles.infoVal, { color: c.textSecondary }]} numberOfLines={1}>
+                  {formattedMax.split('/')[0]}
+                </Text>
+              </View>
+              <View style={styles.infoItem}>
+                <Ionicons name="people-outline" size={16} color={c.textSecondary} />
+                <Text style={[styles.infoVal, { color: c.textSecondary }]}>
+                  {results.sourcesCount || 0} Sources
+                </Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
 
       <View style={[styles.actionArea, { borderTopColor: c.border }]}>
         <TouchableOpacity onPress={() => onDelete(record.id)} style={styles.deleteBtn}>
@@ -84,7 +86,7 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
           <Text style={[styles.detailsBtnText, { color: c.primary }]}>Details</Text>
         </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -95,6 +97,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     marginBottom: Spacing.sm,
+  },
+  bodyPress: {
+    marginHorizontal: -Spacing.md,
+    marginTop: -Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
   },
   contentWrap: {
     flexDirection: 'row',

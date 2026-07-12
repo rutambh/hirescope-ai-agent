@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSearchStore } from '../src/store/searchStore';
-import { INDIA } from '../src/constants/countries';
+import { INDIA, getCountryByCode } from '../src/constants/countries';
 import { useAppStore } from '../src/store/appStore';
 import { formatSalary } from '../src/utils/currency';
 import { LightColors, DarkColors, Spacing, Radius } from '../src/constants/theme';
@@ -30,7 +30,7 @@ export default function ResultsScreen() {
 
   if (!filters) return null;
 
-  const country = INDIA;
+  const country = getCountryByCode(filters.countryCode) ?? INDIA;
 
   const hasData = finalResults !== null && (
     finalResults.rating !== null || finalResults.salaryMin !== null || finalResults.positives.length > 0

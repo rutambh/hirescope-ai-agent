@@ -63,5 +63,53 @@ export function useNotification() {
     }
   }
 
-  return { triggerSearchCompleteNotification };
+  async function triggerProgressNotification(
+    company: string,
+    role: string,
+    phase: string,
+    progress: number,
+    statusText?: string
+  ) {
+    try {
+      let bodyText = `Progress: ${progress}%`;
+      if (statusText) {
+        bodyText += ` · ${statusText}`;
+      } else {
+        const phaseLabels: Record<string, string> = {
+          searching: 'Searching for URLs',
+          extracting: 'Scraping page contents',
+          'ai-extract': 'Extracting data with AI',
+          'ai-enhance': 'Enhancing results with AI',
+        };
+        bodyText += ` · ${phaseLabels[phase] || 'Researching'}`;
+      }
+
+      await Notifications.scheduleNotificationAsync({
+        identifier: 'research_progress',
+        content: {
+          title: `Researching ${company} · ${role}`,
+          body: bodyText,
+          data: { screen: 'progress' },
+          sound: false,
+        },
+        trigger: null,
+      });
+    } catch (error) {
+      console.error('Error triggering progress notification:', error);
+    }
+  }
+
+  async function dismissProgressNotification() {
+    try {
+      await Notifications.dismissNotificationAsync('research_progress');
+    } catch (error) {
+      console.error('Error dismissing progress notification:', error);
+    }
+  }
+
+  return { 
+    triggerSearchCompleteNotification, 
+    triggerProgressNotification, 
+    dismissProgressNotification 
+  };
 }

@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Modal, StyleSheet, useColorScheme } from 
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAIModelStore } from '../store/aiModelStore';
-import { APP_CONFIG } from '../constants/config';
+import { useAIModel } from '../hooks/useAIModel';
 import { useAppStore } from '../store/appStore';
 import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
 
@@ -14,6 +14,7 @@ export function AiDownloadPrompt() {
   const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
   const c = isDark ? DarkColors : LightColors;
   const router = useRouter();
+  const aiModel = useAIModel();
 
   const [visible, setVisible] = useState(false);
 
@@ -25,8 +26,10 @@ export function AiDownloadPrompt() {
   }, [promptDismissed, status]);
 
   const handleDownload = () => {
+    if (status === 'downloading' || status === 'validating') return;
     setVisible(false);
     dismissPrompt();
+    aiModel.downloadModel();
     router.push('/(tabs)/settings');
   };
 
@@ -47,25 +50,8 @@ export function AiDownloadPrompt() {
 
           <Text style={[styles.title, { color: c.text }]}>Unlock AI-Powered Insights</Text>
           <Text style={[styles.message, { color: c.textSecondary }]}>
-            Get instant, natural language summaries of salary data, ratings, and employee reviews — all processed{' '}
-            <Text style={{ fontWeight: '700', color: c.text }}>on your device</Text>.{'\n\n'}
-            No data ever leaves your phone. Zero cloud dependency.
+            No data leaves your phone
           </Text>
-
-          <View style={styles.featureRow}>
-            <View style={[styles.featureChip, { backgroundColor: c.primaryLight }]}>
-              <Ionicons name="lock-closed" size={12} color={c.primary} />
-              <Text style={[styles.featureText, { color: c.primary }]}>100% Private</Text>
-            </View>
-            <View style={[styles.featureChip, { backgroundColor: c.successLight }]}>
-              <Ionicons name="phone-portrait" size={12} color={c.success} />
-              <Text style={[styles.featureText, { color: c.success }]}>On-Device</Text>
-            </View>
-            <View style={[styles.featureChip, { backgroundColor: c.warningLight }]}>
-              <Ionicons name="cloud-offline" size={12} color={c.warning} />
-              <Text style={[styles.featureText, { color: c.warning }]}>No Internet</Text>
-            </View>
-          </View>
 
           <View style={styles.actions}>
             <TouchableOpacity
@@ -73,7 +59,7 @@ export function AiDownloadPrompt() {
               onPress={handleLater}
               activeOpacity={0.7}
             >
-              <Text style={[styles.btnText, { color: c.textSecondary }]}>Maybe Later</Text>
+              <Text style={[styles.btnText, { color: c.textSecondary }]}>Later</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btn, styles.downloadBtn, { backgroundColor: c.primary }]}
@@ -82,7 +68,7 @@ export function AiDownloadPrompt() {
             >
               <Ionicons name="download" size={18} color={isDark ? '#051424' : '#FFF'} />
               <Text style={[styles.btnText, { color: isDark ? '#051424' : '#FFF', fontWeight: '800' }]}>
-                Download (~{APP_CONFIG.modelExpectedSizeMb} MB)
+                Download
               </Text>
             </TouchableOpacity>
           </View>
@@ -130,25 +116,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 19,
     marginBottom: Spacing.lg,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: Spacing.xl,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  featureChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-  },
-  featureText: {
-    fontSize: 11,
-    fontWeight: '700',
   },
   actions: {
     flexDirection: 'row',

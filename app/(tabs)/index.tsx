@@ -7,13 +7,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSearchStore } from '../../src/store/searchStore';
-import { INDIA } from '../../src/constants/countries';
 import { ExperienceSlider } from '../../src/components/ExperienceSlider';
 import { SalaryInput } from '../../src/components/SalaryInput';
 import { useAppStore } from '../../src/store/appStore';
 import { useAIModelStore } from '../../src/store/aiModelStore';
+import { INDIA, COUNTRIES, CountryConfig } from '../../src/constants/countries';
 import { LightColors, DarkColors, Spacing, Radius } from '../../src/constants/theme';
 import { ThemedConfirm } from '../../src/components/ThemedConfirm';
+import { FilterDropdown } from '../../src/components/FilterDropdown';
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function SearchScreen() {
   const [role, setRole] = useState('');
   const [experience, setExperience] = useState(5);
   const [salary, setSalary] = useState('');
+  const [countryCfg, setCountryCfg] = useState<CountryConfig>(INDIA);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [invalidSalaryVisible, setInvalidSalaryVisible] = useState(false);
 
@@ -55,15 +57,15 @@ export default function SearchScreen() {
 
     const searchId = Date.now().toString();
     searchStore.addActiveSearch(searchId, {
-      country: INDIA.name,
-      countryCode: INDIA.code,
+      country: countryCfg.name,
+      countryCode: countryCfg.code,
       company: company.trim(),
       role: role.trim(),
       experience,
       currentSalary: numericSalary,
-      currency: INDIA.currency,
-      currencyCode: INDIA.currencyCode,
-      salaryFormat: INDIA.salaryFormat,
+      currency: countryCfg.currency,
+      currencyCode: countryCfg.currencyCode,
+      salaryFormat: countryCfg.salaryFormat,
     });
     router.replace('/(tabs)/history');
   };
@@ -135,6 +137,21 @@ export default function SearchScreen() {
 
             </View>
 
+            {/* Location Card */}
+            <View style={[styles.card, {
+              backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.surface,
+            }]}>
+              <Text style={[styles.groupTitle, { color: c.primary }]}>LOCATION</Text>
+
+              <FilterDropdown
+                label="Country"
+                icon="globe-outline"
+                selectedValue={countryCfg.name}
+                options={COUNTRIES}
+                onSelect={setCountryCfg}
+              />
+            </View>
+
             {/* Requirements Card */}
             <View style={[styles.card, {
               backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.surface,
@@ -152,7 +169,7 @@ export default function SearchScreen() {
                 label="Current Salary"
                 icon="cash-outline"
                 value={salary}
-                country={INDIA}
+                country={countryCfg}
                 onChange={setSalary}
               />
             </View>

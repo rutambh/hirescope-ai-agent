@@ -1,6 +1,8 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import { APP_CONFIG } from '../constants/config';
 import { useAppStore } from '../store/appStore';
+import { useDomainHealthStore, FailureReason } from '../store/domainHealthStore';
+import { COUNTRY_FOREIGN_HINTS } from '../constants/countries';
 import { logger } from '../utils/logger';
 
 export interface WebViewRequest {
@@ -10,8 +12,24 @@ export interface WebViewRequest {
   reject: (err: any) => void;
 }
 
-// Module-level abort controller — shared across all instances
-let globalAbortController: AbortController | null = null;
+// Module-level cancellation flag — shared across all instances.
+// Set by setCancelFlag() (called from the scraper on user cancel).
+// Replaces the previous dead globalAbortController, which was never
+// instantiated and therefore never actually aborted anything.
+let globalCancelled = false;
+
+export function setCancelFlag() {
+  globalCancelled = true;
+  cancelAllFetches();
+}
+
+export function isCancelled(): boolean {
+  return globalCancelled;
+}
+
+export function resetCancelFlag() {
+  globalCancelled = false;
+}
 
 let activeWebViewRequest: WebViewRequest | null = null;
 const listeners = new Set<() => void>();
@@ -60,7 +78,7 @@ async function requestViaWebView(
   action: 'discover' | 'scrape',
   timeoutMs: number
 ): Promise<any> {
-  if (globalAbortController?.signal.aborted) {
+  if (globalCancelled) {
     throw new Error('Cancelled');
   }
 
@@ -91,62 +109,7 @@ async function requestViaWebView(
 }
 
 export function cancelAllFetches() {
-  if (globalAbortController) {
-    globalAbortController.abort();
-    globalAbortController = null;
-  }
   rejectActiveWebViewRequest(new Error('Cancelled'));
-}
-
-// ─── HTML → Plain Text ─────────────────────────────────────────────────────────
-
-function htmlToText(html: string): string {
-  // Extract JSON-LD script blocks first
-  const jsonLdBlocks: string[] = [];
-  const jsonLdRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  let jsonMatch: RegExpExecArray | null;
-  while ((jsonMatch = jsonLdRegex.exec(html)) !== null) {
-    const blockText = jsonMatch[1].trim();
-    if (blockText && (
-      blockText.includes('salary') || blockText.includes('Salary') ||
-      blockText.includes('compensation') || blockText.includes('Compensation') ||
-      blockText.includes('baseSalary') || blockText.includes('BaseSalary')
-    )) {
-      jsonLdBlocks.push(blockText);
-    }
-  }
-
-  const plainText = html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, ' ')
-    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, ' ')
-    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, ' ')
-    .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, ' ')
-    .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
-    .replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, ' ')
-    .replace(/<button[^>]*>[\s\S]*?<\/button>/gi, ' ')
-    .replace(/<form[^>]*>[\s\S]*?<\/form>/gi, ' ')
-    .replace(/<input[^>]*>/gi, ' ')
-    .replace(/<select[^>]*>[\s\S]*?<\/select>/gi, ' ')
-    .replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/&#(\d+);/g, (_, c) => String.fromCharCode(parseInt(c)))
-    .replace(/&[a-zA-Z]+;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (jsonLdBlocks.length > 0) {
-    return `${plainText}\n\n=== JSON-LD START ===\n${jsonLdBlocks.join('\n')}\n=== JSON-LD END ===`;
-  }
-  return plainText;
 }
 
 // ─── Login-Wall & CAPTCHA Detection ─────────────────────────────────────────────
@@ -247,46 +210,27 @@ function scoreContentQuality(text: string): number {
   return Math.max(0, score);
 }
 
-// ─── URL Extraction from Search HTML ───────────────────────────────────────────
-
-function extractUrlsFromHtml(html: string): string[] {
-  const urls: string[] = [];
-  const seen = new Set<string>();
-
-  // Extract from href attributes
-  const hrefRegex = /<a[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = hrefRegex.exec(html)) !== null) {
-    let url = match[1]
-      .replace(/&amp;/g, '&')
-      .replace(/&#(\d+);/g, (_, c) => String.fromCharCode(parseInt(c)))
-      .replace(/&quot;/g, '"')
-      .replace(/&#039;/g, "'");
-    // Remove tracking params
-    url = url.replace(/[?&](utm_\w+|ref|source|fbclid|gclid|mc_cid|mc_eid)=[^&]*/gi, '');
-    if (!seen.has(url)) { seen.add(url); urls.push(url); }
-  }
-
-  // Also extract from data-href and data-url attributes
-  const dataUrlRegex = /data-(?:href|url)=["'](https?:\/\/[^"']+)["']/gi;
-  while ((match = dataUrlRegex.exec(html)) !== null) {
-    const url = match[1].replace(/&amp;/g, '&');
-    if (!seen.has(url)) { seen.add(url); urls.push(url); }
-  }
-
-  return urls;
-}
-
 // ─── Search Query Builder ──────────────────────────────────────────────────────
+
+function isMultiWordCompany(company: string): boolean {
+  return company.trim().includes(' ');
+}
 
 function buildSearchQuery(
   company: string, role: string, country: string, experience: number,
-  template?: string
+  template?: string, forceUnquoted?: boolean
 ): string {
   const location = country;
   const tpl = template ?? '{company} {role} {country} salary reviews';
+
+  // Smart quoting: wrap multi-word company names in quotes for phrase-match precision
+  // Single-word names are never quoted (quoting a single token adds no benefit)
+  const companyToken = (isMultiWordCompany(company) && !forceUnquoted)
+    ? `"${company}"`
+    : company;
+
   let query = tpl
-    .replace('{company}', company)
+    .replace('{company}', companyToken)
     .replace('{role}', role)
     .replace('{country}', location);
 
@@ -374,6 +318,59 @@ function getDomainName(url: string): string {
   }
 }
 
+// True if the URL points at a downloadable/binary resource (PDF, Office doc,
+// archive, installer, or dynamic download endpoint). Loading these in the
+// WebView triggers the OS download manager instead of rendering HTML.
+export function hasBlockedExtension(url: string): boolean {
+  const lowerUrl = url.toLowerCase();
+  
+  // 1. Strip query and hash to get the path
+  const pathOnly = lowerUrl.split('?')[0].split('#')[0];
+  
+  // 2. Check if the path ends with any blocked file extension (standard check)
+  if (APP_CONFIG.blockedFileExtensions.some(ext => pathOnly.endsWith(ext))) {
+    return true;
+  }
+  
+  // 3. Path-heuristic check: block URLs that contain file-download markers.
+  // We check for specific patterns:
+  // - "/pdf/", "/download/", "/downloads/", "/attachment/", "/uploads/" in path segment
+  // - specific files like "download.php", "download.jsp", "download.aspx", "download.ashx"
+  // - "content-disposition"
+  // - query params: ?file=, ?download=, ?attachment=, ?format=, ?type=
+  const pathSegments = pathOnly.split('/');
+  const hasDownloadSegment = pathSegments.some(seg => 
+    seg === 'download' || 
+    seg === 'downloads' || 
+    seg === 'pdf' || 
+    seg === 'attachment' ||
+    seg === 'upload' ||
+    seg === 'uploads'
+  );
+
+  if (
+    hasDownloadSegment ||
+    lowerUrl.includes('download.php') ||
+    lowerUrl.includes('download.jsp') ||
+    lowerUrl.includes('download.aspx') ||
+    lowerUrl.includes('download.ashx') ||
+    lowerUrl.includes('content-disposition') ||
+    /[?&](file|download|attachment|format|type)=/i.test(lowerUrl)
+  ) {
+    // If it contains "download" or similar, but ends with a safe extension like .html, .htm, .php, .jsp, .aspx, .ashx, we can allow it
+    // because it might be a download page rather than the file itself.
+    const safeExtensions = ['.html', '.htm', '.jsp', '.jspx', '.php', '.php3', '.php4', '.php5', '.phtml', '.asp', '.aspx', '.ashx', '.cfm', '.cgi', '.pl'];
+    const hasSafeExtension = safeExtensions.some(ext => pathOnly.endsWith(ext));
+    
+    // But if it ends with one of our blocked extensions (checked in step 2) or has no safe extension and contains file indicators:
+    if (!hasSafeExtension) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 function cleanAndFilterUrls(
   rawUrls: string[], company: string, country: string
 ): { url: string; score: number }[] {
@@ -387,12 +384,16 @@ function cleanAndFilterUrls(
     if (!url.startsWith('http')) continue;
     const lower = url.toLowerCase();
 
+    // Never scrape downloadable/binary files — they hang the WebView and
+    // trigger the OS download manager instead of rendering HTML.
+    if (hasBlockedExtension(url)) continue;
+
     // Exclude known junk domains
     if (EXCLUDED_DOMAINS.some(d => lower.includes(d))) continue;
 
-    // Country-specific filtering
-    if (lcc === 'india' && ['/us/', '/uk/', '/ca/', '/au/', '.co.uk', '.com.au', '.ca'].some(s => lower.includes(s))) continue;
-    if (lcc === 'united states' && ['/in/', '/uk/', '/ca/', '/au/', '.co.in', '.co.uk', '.com.au'].some(s => lower.includes(s))) continue;
+    // Country-specific filtering — drop URLs clearly meant for another region
+    const foreignHints = COUNTRY_FOREIGN_HINTS[lcc];
+    if (foreignHints && foreignHints.some(s => lower.includes(s))) continue;
 
     // Deduplicate by domain (keep highest scoring URL per domain)
     const domain = getDomainName(url);
@@ -406,6 +407,11 @@ function cleanAndFilterUrls(
     // Boost score for salary/review-specific URL paths
     if (lower.includes('/salary') || lower.includes('/review') || lower.includes('/rating')) domainScore += 1;
     if (lower.includes('/company/') || lower.includes('/employer/')) domainScore += 1;
+
+    // Apply domain health multiplier — deprioritize domains with recent failures
+    // Health is 0-1, where 1 = no recent failures. Score is scaled but never zeroed.
+    const healthScore = useDomainHealthStore.getState().getDomainHealth(domain);
+    domainScore = Math.round(domainScore * healthScore * 100) / 100;
 
     // Keep best URL per domain
     const existing = results.find(r => getDomainName(r.url) === domain);
@@ -435,57 +441,85 @@ export function useDomainScraper() {
     const allRawUrls: string[] = [];
     const engines = ['duckduckgo', 'bing', 'yahoo', 'startpage'];
     const templates = APP_CONFIG.searchQueryTemplates;
+    const needsFallback = isMultiWordCompany(company);
 
-    for (const template of templates) {
-      if (allRawUrls.length >= maxDomains * 3) break;
-      if (deadlineTimestamp && Date.now() >= deadlineTimestamp) {
-        logger.warn('Discovery', 'Deadline reached during URL discovery');
-        break;
+    // Enough raw URLs that, after domain de-dup/scoring, we still have a
+    // healthy pool to scrape from. Once we hit this we stop early.
+    const RAW_TARGET = maxDomains * 2;
+    const RAW_CAP = maxDomains * 3;
+
+    const runEngineQuery = async (
+      engine: string, query: string, allowPage2: boolean
+    ): Promise<void> => {
+      if (globalCancelled) return;
+      if (deadlineTimestamp && Date.now() >= deadlineTimestamp) return;
+
+      const url = searchUrl(engine, query);
+      try {
+        logger.info('Discovery', `WebView discovery ${engine} → "${query}"`);
+        const urls = await requestViaWebView(url, 'discover', APP_CONFIG.urlDiscoveryTimeoutMs);
+        if (globalCancelled) return;
+        if (urls && urls.length > 0) allRawUrls.push(...urls);
+
+        if (allowPage2 && allRawUrls.length < RAW_TARGET) {
+          try {
+            let page2 = '';
+            if (engine === 'bing') page2 = `${url}&first=11`;
+            else if (engine === 'yahoo') page2 = `${url}&b=11`;
+            else if (engine === 'startpage') page2 = `${url}&start=10`;
+            if (page2) {
+              const urls2 = await requestViaWebView(page2, 'discover', APP_CONFIG.urlDiscoveryTimeoutMs);
+              if (globalCancelled) return;
+              if (urls2 && urls2.length > 0) allRawUrls.push(...urls2);
+            }
+          } catch { /* pagination best-effort */ }
+        }
+      } catch (err: any) {
+        if (globalCancelled) return;
+        logger.warn('Discovery', `${engine} failed:`, err?.message || err);
       }
+
+      if (engine !== engines[engines.length - 1]) {
+        await new Promise(r => setTimeout(r, 300 + Math.random() * 500));
+      }
+    };
+
+    // ── Pass 1: primary engine (DuckDuckGo) for every template ──
+    // This is where the large majority of useful URLs come from. We only
+    // escalate to other engines (Pass 2) if we still need more coverage,
+    // which avoids 64+ serial WebView loads blowing the total timeout.
+    for (const template of templates) {
+      if (globalCancelled) break;
+      if (allRawUrls.length >= RAW_TARGET) break;
+      if (deadlineTimestamp && Date.now() >= deadlineTimestamp) break;
+
       const query = buildSearchQuery(company, role, country, experience, template);
+      const urlsBeforeTemplate = allRawUrls.length;
+      await runEngineQuery('duckduckgo', query, true);
 
-      for (const engine of engines) {
-        if (allRawUrls.length >= maxDomains * 3) break;
-        if (globalAbortController?.signal.aborted) return [];
-        if (deadlineTimestamp && Date.now() >= deadlineTimestamp) {
-          logger.warn('Discovery', 'Deadline reached during URL discovery');
-          break;
-        }
+      // Unquoted fallback for multi-word company names that yielded too few URLs
+      const urlsFromTemplate = allRawUrls.length - urlsBeforeTemplate;
+      if (needsFallback && urlsFromTemplate < APP_CONFIG.fallbackUrlThreshold) {
+        if (globalCancelled) break;
+        if (deadlineTimestamp && Date.now() >= deadlineTimestamp) break;
+        const unquotedQuery = buildSearchQuery(company, role, country, experience, template, true);
+        await runEngineQuery('duckduckgo', unquotedQuery, false);
+      }
+    }
 
-        const url = searchUrl(engine, query);
-        try {
-          logger.info('Discovery', `WebView discovery ${engine} → "${query}"`);
-          const urls = await requestViaWebView(url, 'discover', APP_CONFIG.urlDiscoveryTimeoutMs);
-          if (globalAbortController?.signal.aborted) return [];
-          
-          if (urls && urls.length > 0) {
-            allRawUrls.push(...urls);
-          }
+    // ── Pass 2: fill remaining coverage with other engines only if needed ──
+    if (allRawUrls.length < maxDomains) {
+      for (const template of templates) {
+        if (globalCancelled) break;
+        if (allRawUrls.length >= RAW_CAP) break;
+        if (deadlineTimestamp && Date.now() >= deadlineTimestamp) break;
 
-          // Page 2 for more results
-          if (allRawUrls.length < maxDomains * 2) {
-            try {
-              let page2 = '';
-              if (engine === 'bing') page2 = `${url}&first=11`;
-              else if (engine === 'yahoo') page2 = `${url}&b=11`;
-              else if (engine === 'startpage') page2 = `${url}&start=10`;
-              if (page2) {
-                const urls2 = await requestViaWebView(page2, 'discover', APP_CONFIG.urlDiscoveryTimeoutMs);
-                if (globalAbortController?.signal.aborted) return [];
-                if (urls2 && urls2.length > 0) {
-                  allRawUrls.push(...urls2);
-                }
-              }
-            } catch { /* pagination best-effort */ }
-          }
-        } catch (err: any) {
-          if (globalAbortController?.signal.aborted) return [];
-          logger.warn('Discovery', `${engine} failed:`, err?.message || err);
-        }
-
-        // Delay between engines to avoid rate limiting
-        if (engine !== engines[engines.length - 1]) {
-          await new Promise(r => setTimeout(r, 300 + Math.random() * 500));
+        const query = buildSearchQuery(company, role, country, experience, template);
+        for (const engine of ['bing', 'yahoo', 'startpage']) {
+          if (globalCancelled) break;
+          if (allRawUrls.length >= RAW_CAP) break;
+          if (deadlineTimestamp && Date.now() >= deadlineTimestamp) break;
+          await runEngineQuery(engine, query, allRawUrls.length < RAW_TARGET);
         }
       }
     }
@@ -495,17 +529,30 @@ export function useDomainScraper() {
   }, []);
 
   const scrapeUrl = useCallback(async (url: string): Promise<{ text: string; quality: number }> => {
-    if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
+    if (globalCancelled) return { text: '', quality: 0 };
+
+    // Defense-in-depth: never load downloadable/binary files in the WebView.
+    if (hasBlockedExtension(url)) {
+      logger.scrapeFail(url, 'blocked: downloadable file');
+      return { text: '', quality: 0 };
+    }
+
+    const logDomainFailure = (failUrl: string, reason: FailureReason) => {
+      useDomainHealthStore.getState().logFailure(failUrl, reason);
+    };
 
     try {
       logger.info('Scraper', `WebView scrape → ${url}`);
       const result = await requestViaWebView(url, 'scrape', APP_CONFIG.perDomainTimeoutMs);
-      if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
+      if (globalCancelled) return { text: '', quality: 0 };
 
       const text = result.text || '';
       const { isBlocked, reason } = detectLoginWall(text);
       if (isBlocked) {
         logger.scrapeFail(url, `blocked: ${reason}`);
+        // Log domain failure: map detectLoginWall reason to FailureReason
+        const failureReason: FailureReason = reason === 'captcha' ? 'captcha' : reason === 'login_wall' ? 'login_wall' : 'empty_content';
+        logDomainFailure(url, failureReason);
         return { text: '', quality: 0 };
       }
 
@@ -514,19 +561,26 @@ export function useDomainScraper() {
         logger.scrapeSuccess(url, text.length);
         return { text: text.substring(0, 100000), quality: Math.max(quality, 1) };
       }
+      // Content too short — log as empty content failure
       logger.scrapeFail(url, `too short (${text.length}c)`);
+      logDomainFailure(url, 'empty_content');
     } catch (err: any) {
-      if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
+      if (globalCancelled) return { text: '', quality: 0 };
       logger.scrapeFail(url, err?.message || 'failed');
+
+      // Log failure: timeout vs general HTTP error vs blocked download
+      const failureReason: FailureReason =
+        err?.reason ?? (err?.message?.includes('timeout') ? 'timeout' : 'http_error');
+      logDomainFailure(url, failureReason);
 
       // Fallback to Google Cache
       const cacheUrls = getCacheUrl(url);
       for (const cacheUrl of cacheUrls) {
-        if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
+        if (globalCancelled) return { text: '', quality: 0 };
         try {
           logger.info('Scraper', `WebView fallback scrape → ${cacheUrl}`);
           const cacheResult = await requestViaWebView(cacheUrl, 'scrape', APP_CONFIG.perDomainTimeoutMs / 2);
-          if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
+          if (globalCancelled) return { text: '', quality: 0 };
 
           const cacheText = cacheResult.text || '';
           const { isBlocked: cacheBlocked } = detectLoginWall(cacheText);
@@ -538,7 +592,7 @@ export function useDomainScraper() {
             }
           }
         } catch {
-          if (globalAbortController?.signal.aborted) return { text: '', quality: 0 };
+          if (globalCancelled) return { text: '', quality: 0 };
         }
       }
     }

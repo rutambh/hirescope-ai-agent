@@ -49,16 +49,28 @@ export function mergeAllResults(
       ? Math.round(calculateAverage(allRatings)! * 10) / 10
       : null;
 
-  // 3. Compile salaries — median of mins and maxs, with outlier removal
-  const allMins = records
-    .map(r => r.salaryMin)
-    .filter((v): v is number => v !== null);
-  const allMaxs = records
-    .map(r => r.salaryMax)
-    .filter((v): v is number => v !== null);
+  // 3. Compile salaries — aggregate (min,max) pairs from the same page so the
+  //    reported range stays coherent (salaryMin never exceeds salaryMax).
+  //    Fall back to independent min/max medians only when there are too few
+  //    paired records to be meaningful.
+  const pairedMins: number[] = [];
+  const pairedMaxs: number[] = [];
+  for (const r of records) {
+    if (r.salaryMin !== null && r.salaryMax !== null) {
+      pairedMins.push(r.salaryMin);
+      pairedMaxs.push(r.salaryMax);
+    }
+  }
 
-  const filteredMins = removeOutliers(allMins);
-  const filteredMaxs = removeOutliers(allMaxs);
+  const allMins = records.map(r => r.salaryMin).filter((v): v is number => v !== null);
+  const allMaxs = records.map(r => r.salaryMax).filter((v): v is number => v !== null);
+
+  const usePaired = pairedMins.length >= 3;
+  const minSource = usePaired ? pairedMins : allMins;
+  const maxSource = usePaired ? pairedMaxs : allMaxs;
+
+  const filteredMins = removeOutliers(minSource);
+  const filteredMaxs = removeOutliers(maxSource);
 
   const salaryMin =
     filteredMins.length > 0
@@ -85,14 +97,15 @@ export function mergeAllResults(
     }
   }
 
-  // 5. Pros & Cons — theme clustering via themeEngine
+  // 5. Pros & Cons — theme clustering via themeEngine.
+  // Only real extracted pros/cons sections are clustered. Snippets (loose
+  // review-keyword sentences harvested from page text) are intentionally
+  // excluded — feeding them in produced random, off-topic pros/cons.
   const allRawPros = records.flatMap(r => r.pros);
   const allRawCons = records.flatMap(r => r.cons);
-  // Also include snippets for additional signal
-  const allSnippets = records.flatMap(r => r.snippets);
 
-  const clusteredPros = clusterPros([...allRawPros, ...allSnippets]);
-  const clusteredCons = clusterCons([...allRawCons, ...allSnippets]);
+  const clusteredPros = clusterPros(allRawPros);
+  const clusteredCons = clusterCons(allRawCons);
 
   let positives = topThemes(clusteredPros, 5);
   let negatives = topThemes(clusteredCons, 5);

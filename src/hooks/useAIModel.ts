@@ -150,24 +150,16 @@ export function useAIModel() {
       throw new Error('Model file too small — possibly corrupted');
     }
     if (APP_CONFIG.modelExpectedChecksum) {
-      const Crypto = await import('expo-crypto');
-      // For large files, read in chunks to avoid memory issues
-      const fileInfo = await FileSystem.getInfoAsync(MODEL_PATH);
-      const fileSize = (fileInfo as any).size ?? 0;
-      if (fileSize > 100 * 1024 * 1024) {
-        // Skip checksum for very large files to avoid memory issues
-        logger.warn('AI Model', 'Skipping checksum for large file (>100MB)');
-        return;
-      }
-      const hash = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        await FileSystem.readAsStringAsync(MODEL_PATH, { encoding: 'base64' }),
-        { encoding: Crypto.CryptoEncoding.HEX }
-      );
+      // Memory-safe: hashes the file in 4 MB base64 chunks so the whole
+      // (~500MB) model is never held in memory at once.
+      const { sha256File } = await import('../utils/sha256');
+      const hash = await sha256File(MODEL_PATH);
       if (hash !== APP_CONFIG.modelExpectedChecksum) {
+        logger.error('AI Model', `Checksum mismatch: got ${hash}, expected ${APP_CONFIG.modelExpectedChecksum}`);
         await FileSystem.deleteAsync(MODEL_PATH, { idempotent: true });
         throw new Error('Model checksum mismatch — file corrupted');
       }
+      logger.info('AI Model', 'Model checksum verified');
     }
   }, []);
 
