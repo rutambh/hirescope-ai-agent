@@ -2,14 +2,14 @@
   "expo": {
     "name": "HireScope",
     "slug": "hirescope",
-    "version": "1.0.17",
+    "version": "1.0.18",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "hirescope",
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.rutambh.hirescope",
-      "versionCode": 18,
+      "versionCode": 19,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
