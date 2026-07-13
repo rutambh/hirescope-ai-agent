@@ -184,13 +184,13 @@ function addManifestEntries(config) {
 
     // Permissions
     const perms = android['uses-permission'] || [];
-    const hasPerm = (name) => perms.some((p) => p.$ && p.$.name === name);
+    const hasPerm = (name) => perms.some((p) => p.$ && p.$['android:name'] === name);
     if (!hasPerm('android.permission.FOREGROUND_SERVICE')) {
-      perms.push({ $: { name: 'android.permission.FOREGROUND_SERVICE' } });
+      perms.push({ $: { 'android:name': 'android.permission.FOREGROUND_SERVICE' } });
     }
     // API 34+ requires a typed foreground-service permission for dataSync.
     if (!hasPerm('android.permission.FOREGROUND_SERVICE_DATA_SYNC')) {
-      perms.push({ $: { name: 'android.permission.FOREGROUND_SERVICE_DATA_SYNC' } });
+      perms.push({ $: { 'android:name': 'android.permission.FOREGROUND_SERVICE_DATA_SYNC' } });
     }
     android['uses-permission'] = perms;
 
@@ -204,13 +204,13 @@ function addManifestEntries(config) {
 
     const services = app.service || [];
     const svcName = '.ResearchForegroundService';
-    const hasSvc = services.some((s) => s.$ && s.$.name === svcName);
+    const hasSvc = services.some((s) => s.$ && s.$['android:name'] === svcName);
     if (!hasSvc) {
       services.push({
         $: {
-          name: svcName,
-          exported: 'false',
-          foregroundServiceType: 'dataSync',
+          'android:name': svcName,
+          'android:exported': 'false',
+          'android:foregroundServiceType': 'dataSync',
         },
       });
     }
