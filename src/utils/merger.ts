@@ -135,6 +135,10 @@ export function mergeAllResults(
   else if (sourcesCount >= 10) confidence = 'medium';
   else if (sourcesCount >= 5) confidence = 'low';
 
+  if (filters.researchMode === 'narrow' && confidence === 'high') {
+    confidence = 'medium';
+  }
+
   return {
     rating,
     salaryMin,

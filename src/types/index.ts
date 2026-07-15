@@ -12,6 +12,7 @@ export type SearchFilters = {
   currency: string;
   currencyCode: string;
   salaryFormat: string;
+  researchMode: 'deep' | 'narrow';
 };
 
 // Raw scraped page data point

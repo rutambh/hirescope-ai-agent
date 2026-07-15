@@ -318,6 +318,36 @@ function getDomainName(url: string): string {
   }
 }
 
+export const FAST_LANE_DOMAINS = [
+  'kununu.com',
+  'teamblind.com',
+  'salary.com',
+  'shine.com',
+  'geekster.in',
+  'justdial.com',
+  'sulekha.com'
+];
+
+export function isFastLaneDomain(urlOrDomain: string): boolean {
+  const domain = getDomainName(urlOrDomain) || urlOrDomain.toLowerCase().replace(/^www\./, '');
+  return FAST_LANE_DOMAINS.some(d => domain === d || domain.endsWith('.' + d));
+}
+
+export const WEBVIEW_TIER_DOMAINS = [
+  'ambitionbox.com', 'naukri.com', 'careerbliss.com', 'comparably.com',
+  'levels.fyi', 'payscale.com', 'inhersight.com', 'glassdoor.com',
+  'indeed.com', 'linkedin.com', 'mouthshut.com', 'freshersworld.com',
+  'iimjobs.com', 'hirist.tech', 'geeksforgeeks.org', 'fairygodboss.com',
+  'breakroom.cc', '6figr.com', 'cutshort.io', 'interviewbit.com',
+  'groww.in', 'foundit.in', 'salaryexplorer.com', 'talent.com',
+  'erieri.com', 'vault.com', 'jobily.com', 'timesjobs.com'
+];
+
+export function isWebViewTierDomain(urlOrDomain: string): boolean {
+  const domain = getDomainName(urlOrDomain) || urlOrDomain.toLowerCase().replace(/^www\./, '');
+  return WEBVIEW_TIER_DOMAINS.some(d => domain === d || domain.endsWith('.' + d));
+}
+
 // True if the URL points at a downloadable/binary resource (PDF, Office doc,
 // archive, installer, or dynamic download endpoint). Loading these in the
 // WebView triggers the OS download manager instead of rendering HTML.
@@ -371,8 +401,62 @@ export function hasBlockedExtension(url: string): boolean {
   return false;
 }
 
+export function resolveRedirect(raw: string): string {
+  try {
+    const u = new URL(raw);
+    const host = u.hostname;
+    // DuckDuckGo wraps results in /l/?uddg=<percent-encoded target>
+    if (host.includes('duckduckgo.com') && u.pathname === '/l/') {
+      const uddg = u.searchParams.get('uddg');
+      if (uddg) return decodeURIComponent(uddg);
+    }
+    // Yahoo / some engines use ?url=<encoded target>
+    const urlParam = u.searchParams.get('url');
+    if (urlParam) {
+      if (/^https?:/i.test(urlParam)) return urlParam;
+      try {
+        const dec = decodeURIComponent(urlParam);
+        if (/^https?:/i.test(dec)) return dec;
+      } catch (e) {}
+    }
+  } catch (e) {}
+  return raw;
+}
+
+export function extractUrlsFromHtml(html: string, baseUrlString: string): string[] {
+  const links: string[] = [];
+  const seen = new Set<string>();
+  
+  // Match href="something" or href='something'
+  const regex = /href\s*=\s*["']([^"']+)["']/gi;
+  let match;
+  
+  while ((match = regex.exec(html)) !== null) {
+    const rawHref = match[1];
+    
+    // Resolve relative URLs
+    try {
+      let absoluteUrl = rawHref;
+      if (!rawHref.startsWith('http://') && !rawHref.startsWith('https://')) {
+        absoluteUrl = new URL(rawHref, baseUrlString).href;
+      }
+      
+      const resolved = resolveRedirect(absoluteUrl);
+      if (resolved && resolved.startsWith('http')) {
+        const clean = resolved.replace(/[?&](utm_\w+|ref|source|fbclid|gclid|mc_cid|mc_eid)=[^&]*/gi, '');
+        if (!seen.has(clean)) {
+          seen.add(clean);
+          links.push(resolved);
+        }
+      }
+    } catch (e) {}
+  }
+  
+  return links;
+}
+
 function cleanAndFilterUrls(
-  rawUrls: string[], company: string, country: string
+  rawUrls: string[], company: string, country: string, researchMode?: 'deep' | 'narrow'
 ): { url: string; score: number }[] {
   const lc = company.toLowerCase();
   const lcc = country.toLowerCase();
@@ -390,6 +474,9 @@ function cleanAndFilterUrls(
 
     // Exclude known junk domains
     if (EXCLUDED_DOMAINS.some(d => lower.includes(d))) continue;
+
+    // In Narrow mode, exclude WebView-tier domains that block direct HTTP fetch
+    if (researchMode === 'narrow' && isWebViewTierDomain(url)) continue;
 
     // Country-specific filtering — drop URLs clearly meant for another region
     const foreignHints = COUNTRY_FOREIGN_HINTS[lcc];
@@ -435,18 +522,71 @@ function cleanAndFilterUrls(
 export function useDomainScraper() {
   const discoverUrls = useCallback(async (
     company: string, role: string, country: string, experience: number,
-    deadlineTimestamp?: number
+    deadlineTimestamp?: number,
+    researchMode: 'deep' | 'narrow' = 'deep'
   ): Promise<string[]> => {
     const maxDomains = useAppStore.getState().maxDomainsToScrape;
     const allRawUrls: string[] = [];
     const engines = ['duckduckgo', 'bing', 'yahoo', 'startpage'];
     const templates = APP_CONFIG.searchQueryTemplates;
     const needsFallback = isMultiWordCompany(company);
+    const isNarrow = researchMode === 'narrow';
 
     // Enough raw URLs that, after domain de-dup/scoring, we still have a
     // healthy pool to scrape from. Once we hit this we stop early.
     const RAW_TARGET = maxDomains * 2;
     const RAW_CAP = maxDomains * 3;
+
+    const runNativeEngineQuery = async (
+      engine: string, query: string, allowPage2: boolean
+    ): Promise<void> => {
+      if (globalCancelled) return;
+      if (deadlineTimestamp && Date.now() >= deadlineTimestamp) return;
+
+      const url = searchUrl(engine, query);
+      try {
+        logger.info('Discovery', `Native fetch discovery ${engine} → "${query}"`);
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': APP_CONFIG.webViewUserAgent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          }
+        });
+        const html = await response.text();
+        if (globalCancelled) return;
+        
+        const urls = extractUrlsFromHtml(html, url);
+        if (urls && urls.length > 0) allRawUrls.push(...urls);
+
+        if (allowPage2 && allRawUrls.length < RAW_TARGET) {
+          try {
+            let page2 = '';
+            if (engine === 'bing') page2 = `${url}&first=11`;
+            else if (engine === 'yahoo') page2 = `${url}&b=11`;
+            else if (engine === 'startpage') page2 = `${url}&start=10`;
+            if (page2) {
+              const res2 = await fetch(page2, {
+                headers: {
+                  'User-Agent': APP_CONFIG.webViewUserAgent,
+                }
+              });
+              const html2 = await res2.text();
+              if (globalCancelled) return;
+              const urls2 = extractUrlsFromHtml(html2, page2);
+              if (urls2 && urls2.length > 0) allRawUrls.push(...urls2);
+            }
+          } catch { /* pagination best-effort */ }
+        }
+      } catch (err: any) {
+        if (globalCancelled) return;
+        logger.warn('Discovery', `Native fetch for ${engine} failed:`, err?.message || err);
+      }
+
+      if (engine !== engines[engines.length - 1]) {
+        await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
+      }
+    };
 
     const runEngineQuery = async (
       engine: string, query: string, allowPage2: boolean
@@ -495,7 +635,11 @@ export function useDomainScraper() {
 
       const query = buildSearchQuery(company, role, country, experience, template);
       const urlsBeforeTemplate = allRawUrls.length;
-      await runEngineQuery('duckduckgo', query, true);
+      if (isNarrow) {
+        await runNativeEngineQuery('duckduckgo', query, true);
+      } else {
+        await runEngineQuery('duckduckgo', query, true);
+      }
 
       // Unquoted fallback for multi-word company names that yielded too few URLs
       const urlsFromTemplate = allRawUrls.length - urlsBeforeTemplate;
@@ -503,7 +647,11 @@ export function useDomainScraper() {
         if (globalCancelled) break;
         if (deadlineTimestamp && Date.now() >= deadlineTimestamp) break;
         const unquotedQuery = buildSearchQuery(company, role, country, experience, template, true);
-        await runEngineQuery('duckduckgo', unquotedQuery, false);
+        if (isNarrow) {
+          await runNativeEngineQuery('duckduckgo', unquotedQuery, false);
+        } else {
+          await runEngineQuery('duckduckgo', unquotedQuery, false);
+        }
       }
     }
 
@@ -519,16 +667,20 @@ export function useDomainScraper() {
           if (globalCancelled) break;
           if (allRawUrls.length >= RAW_CAP) break;
           if (deadlineTimestamp && Date.now() >= deadlineTimestamp) break;
-          await runEngineQuery(engine, query, allRawUrls.length < RAW_TARGET);
+          if (isNarrow) {
+            await runNativeEngineQuery(engine, query, allRawUrls.length < RAW_TARGET);
+          } else {
+            await runEngineQuery(engine, query, allRawUrls.length < RAW_TARGET);
+          }
         }
       }
     }
 
-    const scored = cleanAndFilterUrls(allRawUrls, company, country);
+    const scored = cleanAndFilterUrls(allRawUrls, company, country, researchMode);
     return scored.map(s => s.url).slice(0, maxDomains);
   }, []);
 
-  const scrapeUrl = useCallback(async (url: string): Promise<{ text: string; quality: number }> => {
+  const scrapeUrl = useCallback(async (url: string, researchMode: 'deep' | 'narrow' = 'deep'): Promise<{ text: string; quality: number }> => {
     if (globalCancelled) return { text: '', quality: 0 };
 
     // Defense-in-depth: never load downloadable/binary files in the WebView.
@@ -540,6 +692,60 @@ export function useDomainScraper() {
     const logDomainFailure = (failUrl: string, reason: FailureReason) => {
       useDomainHealthStore.getState().logFailure(failUrl, reason);
     };
+
+    if (isFastLaneDomain(url) || researchMode === 'narrow') {
+      try {
+        logger.info('Scraper', `Native fetch scrape → ${url}`);
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': APP_CONFIG.webViewUserAgent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          }
+        });
+        if (globalCancelled) return { text: '', quality: 0 };
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const html = await response.text();
+        if (globalCancelled) return { text: '', quality: 0 };
+
+        const cleanText = html
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+          .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, ' ')
+          .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, ' ')
+          .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, ' ')
+          .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, ' ')
+          .replace(/<head\b[^<]*(?:(?!<\/head>)<[^<]*)*<\/head>/gi, ' ')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        const { isBlocked, reason } = detectLoginWall(cleanText);
+        if (isBlocked) {
+          logger.scrapeFail(url, `blocked: ${reason}`);
+          const failureReason: FailureReason = reason === 'captcha' ? 'captcha' : reason === 'login_wall' ? 'login_wall' : 'empty_content';
+          logDomainFailure(url, failureReason);
+          return { text: '', quality: 0 };
+        }
+
+        const quality = scoreContentQuality(cleanText);
+        if (cleanText.length >= 100) {
+          logger.scrapeSuccess(url, cleanText.length);
+          return { text: cleanText.substring(0, 100000), quality: Math.max(quality, 1) };
+        }
+        logger.scrapeFail(url, `too short (${cleanText.length}c)`);
+        logDomainFailure(url, 'empty_content');
+      } catch (err: any) {
+        if (globalCancelled) return { text: '', quality: 0 };
+        logger.scrapeFail(url, `native fetch failed: ${err?.message || err}`);
+        logDomainFailure(url, err?.message?.includes('timeout') ? 'timeout' : 'http_error');
+      }
+      return { text: '', quality: 0 };
+    }
 
     try {
       logger.info('Scraper', `WebView scrape → ${url}`);

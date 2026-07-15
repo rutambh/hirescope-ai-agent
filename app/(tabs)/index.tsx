@@ -19,7 +19,7 @@ import { FilterDropdown } from '../../src/components/FilterDropdown';
 export default function SearchScreen() {
   const router = useRouter();
   const searchStore = useSearchStore();
-  const { theme } = useAppStore();
+  const { theme, keepScreenOnDefault, setKeepScreenOnDefault } = useAppStore();
   const { status: aiStatus } = useAIModelStore();
   const systemColorScheme = useColorScheme();
 
@@ -30,6 +30,7 @@ export default function SearchScreen() {
   const [countryCfg, setCountryCfg] = useState<CountryConfig>(INDIA);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [invalidSalaryVisible, setInvalidSalaryVisible] = useState(false);
+  const [researchMode, setResearchMode] = useState<'deep' | 'narrow'>('deep');
 
   const activeSearches = searchStore.activeSearches;
   const isResearching = activeSearches.length > 0;
@@ -41,6 +42,24 @@ export default function SearchScreen() {
     company.trim().length >= 2 &&
     role.trim().length >= 2 &&
     salary.trim().length > 0;
+
+  const launchSearch = (numericSalaryVal?: number) => {
+    const numericSalary = numericSalaryVal ?? parseFloat(salary);
+    const searchId = Date.now().toString();
+    searchStore.addActiveSearch(searchId, {
+      country: countryCfg.name,
+      countryCode: countryCfg.code,
+      company: company.trim(),
+      role: role.trim(),
+      experience,
+      currentSalary: numericSalary,
+      currency: countryCfg.currency,
+      currencyCode: countryCfg.currencyCode,
+      salaryFormat: countryCfg.salaryFormat,
+      researchMode,
+    });
+    router.replace('/(tabs)/history');
+  };
 
   const handleStart = () => {
     if (!isFormValid) return;
@@ -55,19 +74,7 @@ export default function SearchScreen() {
       return;
     }
 
-    const searchId = Date.now().toString();
-    searchStore.addActiveSearch(searchId, {
-      country: countryCfg.name,
-      countryCode: countryCfg.code,
-      company: company.trim(),
-      role: role.trim(),
-      experience,
-      currentSalary: numericSalary,
-      currency: countryCfg.currency,
-      currencyCode: countryCfg.currencyCode,
-      salaryFormat: countryCfg.salaryFormat,
-    });
-    router.replace('/(tabs)/history');
+    launchSearch(numericSalary);
   };
 
   return (
@@ -152,6 +159,75 @@ export default function SearchScreen() {
               />
             </View>
 
+            {/* Research Mode Card */}
+            <View style={[styles.card, {
+              backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.surface,
+            }]}>
+              <Text style={[styles.groupTitle, { color: c.primary }]}>RESEARCH MODE</Text>
+              
+              <View style={styles.modeContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.modeOption,
+                    {
+                      backgroundColor: researchMode === 'deep' ? c.primaryLight : (isDark ? c.surfaceAlt : c.bg),
+                      borderColor: researchMode === 'deep' ? c.primary : (isDark ? 'transparent' : c.border),
+                      borderWidth: 1.5,
+                    }
+                  ]}
+                  onPress={() => setResearchMode('deep')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.modeHeader}>
+                    <Ionicons name="layers-outline" size={18} color={researchMode === 'deep' ? c.primary : c.textSecondary} />
+                    <Text style={[styles.modeTitle, { color: researchMode === 'deep' ? c.primary : c.text }]}>Deep Research</Text>
+                  </View>
+                  <Text style={[styles.modeDesc, { color: c.textSecondary }]}>
+                    15–20 min budget. Scrapes core + WebView sources for maximum coverage.
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.modeOption,
+                    {
+                      backgroundColor: researchMode === 'narrow' ? c.primaryLight : (isDark ? c.surfaceAlt : c.bg),
+                      borderColor: researchMode === 'narrow' ? c.primary : (isDark ? 'transparent' : c.border),
+                      borderWidth: 1.5,
+                      marginTop: Spacing.sm,
+                    }
+                  ]}
+                  onPress={() => setResearchMode('narrow')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.modeHeader}>
+                    <Ionicons name="flash-outline" size={18} color={researchMode === 'narrow' ? c.primary : c.textSecondary} />
+                    <Text style={[styles.modeTitle, { color: researchMode === 'narrow' ? c.primary : c.text }]}>Narrow Research</Text>
+                  </View>
+                  <Text style={[styles.modeDesc, { color: c.textSecondary }]}>
+                    2–3 min budget. Fast native requests only. Skips bot-blocked sites.
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {researchMode === 'deep' && (
+                <TouchableOpacity
+                  style={styles.keepScreenOnRow}
+                  onPress={() => setKeepScreenOnDefault(!keepScreenOnDefault)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name={keepScreenOnDefault ? "checkbox" : "square-outline"}
+                    size={20}
+                    color={c.primary}
+                  />
+                  <Text style={[styles.keepScreenOnText, { color: c.textSecondary }]}>
+                    Keep screen on — prevents auto-lock during research. Please stay on this screen; switching apps will pause the search.
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             {/* Requirements Card */}
             <View style={[styles.card, {
               backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.surface,
@@ -226,6 +302,7 @@ export default function SearchScreen() {
         singleButton
         onConfirm={() => setInvalidSalaryVisible(false)}
       />
+
     </View>
   );
 }
@@ -299,5 +376,38 @@ const styles = StyleSheet.create({
   
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.xl, gap: Spacing.xs },
   footerText: { fontSize: 11, textAlign: 'center' },
+  modeContainer: {
+    gap: Spacing.sm,
+  },
+  modeOption: {
+    borderRadius: 16,
+    padding: Spacing.md,
+  },
+  modeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginBottom: 4,
+  },
+  modeTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  modeDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  keepScreenOnRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    paddingHorizontal: 4,
+  },
+  keepScreenOnText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 16,
+  },
 });
 

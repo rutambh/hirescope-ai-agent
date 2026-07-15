@@ -10,6 +10,7 @@ import { mergeAllResults } from '../utils/merger';
 import { APP_CONFIG } from '../constants/config';
 import { RawDataPoint, SearchRecord } from '../types';
 import { logger } from '../utils/logger';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
   startResearchService,
   stopResearchService,
@@ -63,6 +64,9 @@ export function useScraper() {
       store.updateActiveSearch(activeSearchIdRef.current, { phase: 'error' });
       activeSearchIdRef.current = null;
     }
+    try {
+      deactivateKeepAwake('hirescope-research');
+    } catch (e) {}
     stopResearchService();
     dismissProgress();
   }, [cleanupIntervals, dismissProgress]);
@@ -145,7 +149,21 @@ export function useScraper() {
       }
     }, 1000);
 
+    const isDeep = filters.researchMode === 'deep';
+    const keepScreenOn = useAppStore.getState().keepScreenOnDefault;
+    let keepAwakeActivated = false;
+
     try {
+      if (isDeep && keepScreenOn) {
+        try {
+          await activateKeepAwakeAsync('hirescope-research');
+          keepAwakeActivated = true;
+          logger.info('Scraper', 'Keep screen awake activated for Deep Research');
+        } catch (e) {
+          logger.error('Scraper', 'Failed to activate keep awake', e);
+        }
+      }
+
       // ── Phase 1: URL Discovery ────────────────────────────────────────────
       useSearchStore.getState().updateActiveSearch(searchId, { phase: 'searching' });
       updateNotification('searching', 0);
@@ -156,7 +174,7 @@ export function useScraper() {
       try {
         logger.phase('searching', `Discovering URLs for ${filters.company} - ${filters.role}`);
         discoveredUrls = await domainScraper.discoverUrls(
-          filters.company, filters.role, filters.country, filters.experience, deadline
+          filters.company, filters.role, filters.country, filters.experience, deadline, filters.researchMode
         );
       } catch (err) {
         logger.error('Discovery', 'URL discovery failed', err);
@@ -197,7 +215,7 @@ export function useScraper() {
         let result = { text: '', quality: 0 };
 
         try {
-          result = await domainScraper.scrapeUrl(url);
+          result = await domainScraper.scrapeUrl(url, filters.researchMode);
         } catch { }
 
         if (isCancelled()) {
@@ -217,7 +235,7 @@ export function useScraper() {
             return;
           }
           try {
-            const retry = await domainScraper.scrapeUrl(url);
+            const retry = await domainScraper.scrapeUrl(url, filters.researchMode);
             if (retry.text.length > result.text.length) result = retry;
           } catch { }
         }
@@ -376,6 +394,14 @@ export function useScraper() {
       useSearchStore.getState().updateActiveSearch(searchId, { phase: 'error' });
       await dismissProgress();
     } finally {
+      if (keepAwakeActivated) {
+        try {
+          deactivateKeepAwake('hirescope-research');
+          logger.info('Scraper', 'Keep screen awake deactivated');
+        } catch (e) {
+          logger.error('Scraper', 'Failed to deactivate keep awake', e);
+        }
+      }
       // Always tear down the foreground service when the research job ends,
       // regardless of success / cancel / error path.
       stopResearchService();

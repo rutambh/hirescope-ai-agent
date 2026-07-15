@@ -54,6 +54,22 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
               <Text style={[styles.roleTitle, { color: c.text }]} numberOfLines={1}>
                 {filters.role}
               </Text>
+              <View style={[
+                styles.modeBadge,
+                {
+                  backgroundColor: filters.researchMode === 'deep' ? c.primaryLight : c.accent + '20',
+                  borderColor: filters.researchMode === 'deep' ? c.primary + '40' : c.accent + '40',
+                }
+              ]}>
+                <Text style={[
+                  styles.modeBadgeText,
+                  {
+                    color: filters.researchMode === 'deep' ? c.primary : c.accent,
+                  }
+                ]}>
+                  {filters.researchMode === 'deep' ? 'Deep' : 'Narrow'}
+                </Text>
+              </View>
             </View>
             
             <Text style={[styles.metaSub, { color: c.textSecondary }]}>
@@ -166,5 +182,17 @@ const styles = StyleSheet.create({
   detailsBtnText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  modeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+  },
+  modeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });
