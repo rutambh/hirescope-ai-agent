@@ -1,20 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FinalResults, SearchFilters } from '../types';
 import { CountryConfig } from '../constants/countries';
 import { formatSalary } from '../utils/currency';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius, Shadows } from '../constants/theme';
+import { Spacing, Radius, Shadows, useTheme } from '../constants/theme';
 
 type Props = { results: FinalResults; filters: SearchFilters; country: CountryConfig };
 
 export function SalaryCard({ results, filters, country }: Props) {
   const { salaryMin, salaryMax } = results;
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   const hasSalaryData = salaryMin !== null && salaryMax !== null;
   const displayMin = hasSalaryData ? salaryMin : 0;
@@ -33,7 +31,7 @@ export function SalaryCard({ results, filters, country }: Props) {
 
   return (
     <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
-      <View style={styles.accentBar} />
+      <View style={[styles.accentBar, { backgroundColor: c.primary }]} />
       {hasSalaryData ? (
         <>
           <Text style={[styles.rangeLabel, { color: c.textMuted }]}>Expected Range</Text>
@@ -117,7 +115,7 @@ export function SalaryCard({ results, filters, country }: Props) {
 
 const styles = StyleSheet.create({
   card: { borderRadius: Radius.xl, marginBottom: Spacing.lg, borderWidth: 1, overflow: 'hidden', padding: Spacing.xl },
-  accentBar: { height: 3, backgroundColor: '#8B5CF6', marginHorizontal: -Spacing.xl, marginTop: -Spacing.xl, marginBottom: Spacing.lg },
+  accentBar: { height: 3, marginHorizontal: -Spacing.xl, marginTop: -Spacing.xl, marginBottom: Spacing.lg },
   rangeLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
   rangeText: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginBottom: Spacing.md, alignSelf: 'stretch' },
   chartContainer: { marginTop: Spacing.sm, marginBottom: Spacing.lg, alignSelf: 'stretch' },

@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, useColorScheme } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
+import { Spacing, Radius, useTheme } from '../constants/theme';
 
 type Props = {
   visible: boolean;
@@ -28,9 +28,7 @@ export function ThemedConfirm({
   onCancel,
 }: Props) {
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   const handleClose = singleButton ? onConfirm : (onCancel ?? onConfirm);
 

@@ -1,16 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
+import { Spacing, Radius, useTheme } from '../constants/theme';
 
 type Props = { positives: string[]; negatives: string[] };
 
 export function ProsConsCard({ positives, negatives }: Props) {
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   return (
     <View style={styles.container}>

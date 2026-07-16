@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
-  KeyboardAvoidingView, Platform, useColorScheme,
+  KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,17 +12,16 @@ import { SalaryInput } from '../../src/components/SalaryInput';
 import { useAppStore } from '../../src/store/appStore';
 import { useAIModelStore } from '../../src/store/aiModelStore';
 import { INDIA, COUNTRIES, CountryConfig } from '../../src/constants/countries';
-import { LightColors, DarkColors, Spacing, Radius } from '../../src/constants/theme';
+import { Spacing, Radius, useTheme } from '../../src/constants/theme';
 import { ThemedConfirm } from '../../src/components/ThemedConfirm';
 import { FilterDropdown } from '../../src/components/FilterDropdown';
+import { APP_ICON } from '../../src/constants/config';
 
 export default function SearchScreen() {
   const router = useRouter();
   const searchStore = useSearchStore();
   const { theme, keepScreenOnDefault, setKeepScreenOnDefault } = useAppStore();
   const { status: aiStatus } = useAIModelStore();
-  const systemColorScheme = useColorScheme();
-
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
   const [experience, setExperience] = useState(5);
@@ -35,8 +34,7 @@ export default function SearchScreen() {
   const activeSearches = searchStore.activeSearches;
   const isResearching = activeSearches.length > 0;
 
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   const isFormValid =
     company.trim().length >= 2 &&
@@ -83,9 +81,13 @@ export default function SearchScreen() {
         {/* Top App Bar */}
         <View style={styles.topBar}>
           <View style={styles.topBarLeft}>
-            <Text style={[styles.brandText, { color: c.primary }]}>HireScope</Text>
+            <Image source={APP_ICON} style={styles.brandImage} />
+            <Text style={[styles.brandText, { color: c.text }]}>Hire<Text style={{ color: c.primary }}>Scope</Text></Text>
           </View>
-          <View style={{ width: 38 }} />
+          <View style={[styles.brandPill, { backgroundColor: c.primaryLight }]}>
+            <Ionicons name="shield-checkmark-outline" size={13} color={c.primary} />
+            <Text style={[styles.brandPillText, { color: c.primary }]}>Private</Text>
+          </View>
         </View>
 
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -96,13 +98,13 @@ export default function SearchScreen() {
           >
             {/* Position Card */}
             <View style={[styles.card, {
-              backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.surface,
+              backgroundColor: c.card, borderColor: c.border, borderWidth: 1, shadowColor: c.cardShadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 1, shadowRadius: 16, elevation: 4,
             }]}>
               <Text style={[styles.groupTitle, { color: c.primary }]}>POSITION</Text>
 
               <View style={styles.field}>
                 <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Company</Text>
-                <View style={[styles.inputShell, { backgroundColor: isDark ? c.surfaceAlt : c.bg, borderColor: c.primary + '30', borderWidth: 1 }]}>
+                <View style={[styles.inputShell, { backgroundColor: isDark ? c.surfaceAlt : c.primaryFaint, borderColor: c.primaryLight, borderWidth: 1 }]}>
                   <Ionicons name="business-outline" size={18} color={c.primary} style={{ marginRight: 10 }} />
                   <TextInput
                     style={[styles.input, { color: c.text }]}
@@ -123,7 +125,7 @@ export default function SearchScreen() {
 
               <View style={styles.field}>
                 <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Role or Title</Text>
-                <View style={[styles.inputShell, { backgroundColor: isDark ? c.surfaceAlt : c.bg, borderColor: c.primary + '30', borderWidth: 1 }]}>
+                <View style={[styles.inputShell, { backgroundColor: isDark ? c.surfaceAlt : c.primaryFaint, borderColor: c.primaryLight, borderWidth: 1 }]}>
                   <Ionicons name="briefcase-outline" size={18} color={c.primary} style={{ marginRight: 10 }} />
                   <TextInput
                     style={[styles.input, { color: c.text }]}
@@ -146,7 +148,7 @@ export default function SearchScreen() {
 
             {/* Location Card */}
             <View style={[styles.card, {
-              backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.surface,
+              backgroundColor: c.card, borderColor: c.border, borderWidth: 1, shadowColor: c.cardShadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 1, shadowRadius: 16, elevation: 4,
             }]}>
               <Text style={[styles.groupTitle, { color: c.primary }]}>LOCATION</Text>
 
@@ -161,7 +163,7 @@ export default function SearchScreen() {
 
             {/* Research Mode Card */}
             <View style={[styles.card, {
-              backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.surface,
+              backgroundColor: c.card, borderColor: c.border, borderWidth: 1, shadowColor: c.cardShadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 1, shadowRadius: 16, elevation: 4,
             }]}>
               <Text style={[styles.groupTitle, { color: c.primary }]}>RESEARCH MODE</Text>
               
@@ -230,7 +232,7 @@ export default function SearchScreen() {
 
             {/* Requirements Card */}
             <View style={[styles.card, {
-              backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.surface,
+              backgroundColor: c.card, borderColor: c.border, borderWidth: 1, shadowColor: c.cardShadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 1, shadowRadius: 16, elevation: 4,
             }]}>
               <Text style={[styles.groupTitle, { color: c.primary }]}>REQUIREMENTS</Text>
 
@@ -264,10 +266,10 @@ export default function SearchScreen() {
               onPress={handleStart}
               activeOpacity={0.85}
             >
-              <Text style={[styles.actionBtnText, { color: isFormValid ? (isDark ? '#051424' : '#ffffff') : c.textMuted, fontWeight: '700' }]}>
+              <Text style={[styles.actionBtnText, { color: isFormValid ? (c.onPrimary) : c.textMuted, fontWeight: '700' }]}>
                 {activeSearches.length >= 1 ? 'Limit Reached' : 'Start Research'}
               </Text>
-              <Ionicons name={activeSearches.length >= 1 ? "lock-closed-outline" : "arrow-forward-outline"} size={18} color={isFormValid ? (isDark ? '#051424' : '#ffffff') : c.textMuted} />
+              <Ionicons name={activeSearches.length >= 1 ? "lock-closed-outline" : "arrow-forward-outline"} size={18} color={isFormValid ? (c.onPrimary) : c.textMuted} />
             </TouchableOpacity>
 
             
@@ -320,15 +322,15 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  profileBorder: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1.5,
-    overflow: 'hidden',
+  brandImage: {
+    width: 34, height: 34, borderRadius: 10,
   },
-  profileImg: { width: '100%', height: '100%', objectFit: 'cover' },
-  brandText: { fontSize: 20, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium', fontWeight: '700', letterSpacing: -0.5 },
+  brandPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 9999,
+  },
+  brandPillText: { fontSize: 12, fontWeight: '700' },
+  brandText: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
   topBarBtn: {
     width: 38,
     height: 38,
@@ -337,7 +339,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   card: {
-    borderRadius: 20,
+    borderRadius: Radius.lg,
     padding: Spacing.lg,
     marginBottom: Spacing.md,
   },
@@ -346,30 +348,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1.5,
     marginBottom: Spacing.md,
+    textTransform: 'uppercase',
   },
   field: { marginBottom: Spacing.md },
   inputLabel: { fontSize: 12, fontWeight: '600', marginBottom: Spacing.xs, textTransform: 'uppercase', letterSpacing: 0.5 },
   inputShell: {
-    borderRadius: 9999,
+    borderRadius: Radius.full,
     borderWidth: 1,
     paddingHorizontal: Spacing.xl,
-    height: 52,
+    height: 54,
     flexDirection: 'row',
     alignItems: 'center',
   },
   input: { flex: 1, fontSize: 15, fontWeight: '500', padding: 0 },
   actionBtn: {
-    borderRadius: 9999,
-    height: 54,
+    borderRadius: Radius.full,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    marginTop: Spacing.md,
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
     elevation: 6,
   },
   actionBtnText: { fontSize: 15, fontWeight: '700' },

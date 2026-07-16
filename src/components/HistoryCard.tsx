@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SearchRecord } from '../types';
 import { INDIA, getCountryByCode } from '../constants/countries';
 import { formatSalary } from '../utils/currency';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
+import { Spacing, Radius, useTheme } from '../constants/theme';
 
 type Props = {
   record: SearchRecord;
@@ -16,9 +16,7 @@ type Props = {
 export function HistoryCard({ record, onView, onDelete }: Props) {
   const { filters, results, timestamp } = record;
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   const country = getCountryByCode(filters.countryCode) ?? INDIA;
 
@@ -42,7 +40,7 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
   };
 
   return (
-    <View style={[styles.card, { backgroundColor: isDark ? 'rgba(30, 29, 52, 0.4)' : c.card, borderColor: c.border }]}>
+    <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
       <TouchableOpacity
         style={styles.bodyPress}
         onPress={() => onView(record)}
@@ -57,7 +55,7 @@ export function HistoryCard({ record, onView, onDelete }: Props) {
               <View style={[
                 styles.modeBadge,
                 {
-                  backgroundColor: filters.researchMode === 'deep' ? c.primaryLight : c.accent + '20',
+                  backgroundColor: filters.researchMode === 'deep' ? c.primaryLight : c.accentLight,
                   borderColor: filters.researchMode === 'deep' ? c.primary + '40' : c.accent + '40',
                 }
               ]}>

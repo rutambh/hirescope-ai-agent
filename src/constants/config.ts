@@ -85,3 +85,10 @@ export const APP_CONFIG = {
   webViewUserAgent:
     'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36',
 };
+
+// Shared app-icon source for in-app UI (e.g. the home screen header).
+// Keep this path in sync with `expo.icon` in app.json — both point at the
+// same launcher icon so a future icon swap only needs the asset replaced
+// (and this path / app.json updated together). Defined here as the single
+// source of truth so screens never hardcode the icon location.
+export const APP_ICON = require('../assets/images/icon.png');

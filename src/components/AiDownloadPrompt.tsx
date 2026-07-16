@@ -1,18 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, useColorScheme } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAIModelStore } from '../store/aiModelStore';
 import { useAIModel } from '../hooks/useAIModel';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
+import { Spacing, Radius, useTheme } from '../constants/theme';
 
 export function AiDownloadPrompt() {
   const { status, promptDismissed, dismissPrompt } = useAIModelStore();
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
   const router = useRouter();
   const aiModel = useAIModel();
 
@@ -66,8 +64,8 @@ export function AiDownloadPrompt() {
               onPress={handleDownload}
               activeOpacity={0.7}
             >
-              <Ionicons name="download" size={18} color={isDark ? '#051424' : '#FFF'} />
-              <Text style={[styles.btnText, { color: isDark ? '#051424' : '#FFF', fontWeight: '800' }]}>
+              <Ionicons name="download" size={18} color={c.onPrimary} />
+              <Text style={[styles.btnText, { color: c.onPrimary, fontWeight: '800' }]}>
                 Download
               </Text>
             </TouchableOpacity>

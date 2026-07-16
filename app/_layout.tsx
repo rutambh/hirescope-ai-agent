@@ -1,14 +1,14 @@
 import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Appearance, useColorScheme } from 'react-native';
+import { Appearance } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { useNotification } from '../src/hooks/useNotification';
 import { useAppStore } from '../src/store/appStore';
 import { BackgroundScraper } from '../src/components/BackgroundScraper';
 import { AiDownloadPrompt } from '../src/components/AiDownloadPrompt';
 import { useAiDownloadNotification } from '../src/hooks/useAiDownloadNotification';
-import { LightColors, DarkColors } from '../src/constants/theme';
+import { useTheme } from '../src/constants/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -29,9 +29,7 @@ export default function RootLayout() {
   useNotification();
   useAiDownloadNotification();
   const theme = useAppStore((state) => state.theme);
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   useEffect(() => {
     if (theme === 'dark') Appearance.setColorScheme('dark');

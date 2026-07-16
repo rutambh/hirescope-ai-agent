@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, Modal, FlatList, TextInput, StyleSheet, useColorScheme,
+  View, Text, TouchableOpacity, Modal, FlatList, TextInput, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CountryConfig } from '../constants/countries';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
+import { Spacing, Radius, useTheme } from '../constants/theme';
 
 type Props = {
   label: string;
@@ -20,9 +20,7 @@ export function FilterDropdown({ label, selectedValue, options, icon, onSelect }
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   const filtered = options.filter(o => o.name.toLowerCase().includes(query.toLowerCase()));
 

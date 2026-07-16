@@ -1,11 +1,11 @@
 import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, PanResponder, TouchableOpacity,
-  GestureResponderEvent, useColorScheme,
+  GestureResponderEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
+import { Spacing, Radius, useTheme } from '../constants/theme';
 
 type Props = {
   label: string;
@@ -18,9 +18,7 @@ type Props = {
 
 export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChange }: Props) {
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   const trackWidthRef = useRef(0);
   const trackLeftRef = useRef(0);
@@ -75,10 +73,10 @@ export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChan
           onLayout={handleLayout}
           {...panResponder.panHandlers}
         >
-          <View style={[styles.trackBg, { backgroundColor: isDark ? '#1E1E3A' : '#E2E8F0' }]}>
+          <View style={[styles.trackBg, { backgroundColor: c.surfaceAlt }]}>
             <View style={[styles.trackFill, { width: `${fillPct}%`, backgroundColor: c.primary }]} />
           </View>
-          <View style={[styles.thumb, { left: `${fillPct}%`, borderColor: c.primary, backgroundColor: isDark ? '#1A1A35' : '#FFF' }]} />
+          <View style={[styles.thumb, { left: `${fillPct}%`, borderColor: c.primary, backgroundColor: c.surface, shadowColor: c.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 }]} />
         </View>
 
         <TouchableOpacity
@@ -107,7 +105,5 @@ const styles = StyleSheet.create({
   thumb: {
     position: 'absolute', width: 20, height: 20, borderRadius: Radius.full,
     borderWidth: 3, marginLeft: -10,
-    shadowColor: '#8B5CF6', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3, shadowRadius: 4, elevation: 4,
   },
 });

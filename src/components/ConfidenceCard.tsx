@@ -1,18 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FinalResults } from '../types';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
+import { Spacing, Radius, useTheme } from '../constants/theme';
 
 type Props = { results: FinalResults };
 
 export function ConfidenceCard({ results }: Props) {
   const { confidence, sourcesCount, domainsScraped, timeElapsedSeconds, aiEnhancedSummary } = results;
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   const confMap = {
     high: { label: 'High', color: c.success, icon: 'shield-checkmark' as const, pct: 100 },

@@ -1,4 +1,6 @@
 import { Platform } from 'react-native';
+import { useColorScheme } from 'react-native';
+import { useAppStore } from '../store/appStore';
 
 export const palette = {
   violet: { 50: '#F5F3FF', 100: '#EDE9FE', 200: '#DDD6FE', 300: '#C4B5FD', 400: '#A78BFA', 500: '#8B5CF6', 600: '#7C3AED', 700: '#6D28D9', 800: '#5B21B6', 900: '#4C1D95' },
@@ -9,71 +11,81 @@ export const palette = {
   slate: { 50: '#F8FAFC', 100: '#F1F5F9', 200: '#E2E8F0', 300: '#CBD5E1', 400: '#94A3B8', 500: '#64748B', 600: '#475569', 700: '#334155', 800: '#1E293B', 900: '#0F172A', 950: '#020617' },
 };
 
+// ── Modern dark theme ──
+// Deep, slightly desaturated indigo-black base with a vibrant violet/indigo accent.
 export const DarkColors = {
-  bg: '#051424',
-  bgAlt: '#0d1c2d',
-  surface: '#122131',
-  surfaceAlt: '#1c2b3c',
-  surfaceElevated: '#273647',
-  card: '#122131',
-  border: '#414754',
-  borderFocus: '#aac7ff',
-  text: '#d4e4fa',
-  textSecondary: '#c0c6d6',
-  textMuted: '#8b91a0',
-  primary: '#aac7ff',
-  primaryDark: '#005db8',
-  primaryLight: 'rgba(170, 199, 255, 0.15)',
-  primaryFaint: 'rgba(170, 199, 255, 0.08)',
-  accent: '#c3c5d8',
-  accentLight: 'rgba(195, 197, 216, 0.15)',
-  success: '#3e90ff',
-  successLight: 'rgba(62, 144, 255, 0.15)',
-  danger: '#ff6b6b',
-  dangerLight: 'rgba(255, 107, 107, 0.15)',
-  warning: '#b9c3ff',
-  warningLight: 'rgba(185, 195, 255, 0.15)',
-  star: '#aac7ff',
-  gradientStart: '#aac7ff',
-  gradientEnd: '#3e90ff',
-  tabBar: 'rgba(18, 33, 49, 0.85)',
-  tabBarBorder: 'rgba(170, 199, 255, 0.2)',
-  overlay: 'rgba(5, 20, 36, 0.7)',
-  glassBg: 'rgba(18, 33, 49, 0.4)',
+  bg: '#0B0B12',
+  bgAlt: '#12121C',
+  surface: '#171722',
+  surfaceAlt: '#1F1F2E',
+  surfaceElevated: '#262638',
+  card: '#171722',
+  border: '#2A2A3C',
+  borderFocus: '#8B7CF6',
+  text: '#F4F4FB',
+  textSecondary: '#B6B6C8',
+  textMuted: '#76768C',
+  primary: '#8B7CF6',
+  primaryDark: '#6D5EF0',
+  primaryLight: 'rgba(139, 124, 246, 0.16)',
+  primaryFaint: 'rgba(139, 124, 246, 0.08)',
+  accent: '#22D3EE',
+  accentLight: 'rgba(34, 211, 238, 0.14)',
+  success: '#34D399',
+  successLight: 'rgba(52, 211, 153, 0.14)',
+  danger: '#FB7185',
+  dangerLight: 'rgba(251, 113, 133, 0.14)',
+  warning: '#FBBF24',
+  warningLight: 'rgba(251, 191, 36, 0.14)',
+  star: '#FBBF24',
+  gradientStart: '#8B7CF6',
+  gradientEnd: '#22D3EE',
+  tabBar: 'rgba(14, 14, 22, 0.86)',
+  tabBarBorder: 'rgba(139, 124, 246, 0.22)',
+  overlay: 'rgba(7, 7, 12, 0.72)',
+  glassBg: 'rgba(34, 34, 50, 0.45)',
+  cardShadow: 'rgba(0, 0, 0, 0.45)',
+  onPrimary: '#FFFFFF',
 };
 
+// ── Modern light theme ──
+// Crisp near-white with a vivid indigo/violet primary and cyan accent.
 export const LightColors = {
-  bg: '#f9f9f9',
-  bgAlt: '#f3f3f3',
-  surface: '#ffffff',
-  surfaceAlt: '#ffffff',
-  surfaceElevated: '#e8e8e8',
-  card: 'rgba(255, 255, 255, 0.8)',
-  border: '#e2e8f0',
-  borderFocus: '#3525cd',
-  text: '#1a1c1c',
-  textSecondary: '#464555',
-  textMuted: '#777587',
-  primary: '#3525cd',
-  primaryDark: '#4f46e5',
-  primaryLight: 'rgba(53, 37, 205, 0.15)',
-  primaryFaint: 'rgba(53, 37, 205, 0.08)',
-  accent: '#6b38d4',
-  accentLight: 'rgba(107, 56, 212, 0.15)',
-  success: '#3525cd',
-  successLight: 'rgba(53, 37, 205, 0.15)',
-  danger: '#dc2626',
-  dangerLight: 'rgba(220, 38, 38, 0.12)',
-  warning: '#ffb2b7',
-  warningLight: 'rgba(255, 178, 183, 0.15)',
-  star: '#3525cd',
-  gradientStart: '#4f46e5',
-  gradientEnd: '#8455ef',
-  tabBar: 'rgba(249, 249, 249, 0.85)',
-  tabBarBorder: 'rgba(79, 70, 229, 0.15)',
-  overlay: 'rgba(26, 28, 28, 0.5)',
-  glassBg: 'rgba(249, 249, 249, 0.7)',
+  bg: '#F7F7FB',
+  bgAlt: '#EFEFF5',
+  surface: '#FFFFFF',
+  surfaceAlt: '#F2F2F8',
+  surfaceElevated: '#E9E9F4',
+  card: 'rgba(255, 255, 255, 0.85)',
+  border: '#E6E6F0',
+  borderFocus: '#6D5EF0',
+  text: '#15151F',
+  textSecondary: '#4A4A5E',
+  textMuted: '#8989A0',
+  primary: '#6D5EF0',
+  primaryDark: '#5A4BD6',
+  primaryLight: 'rgba(109, 94, 240, 0.12)',
+  primaryFaint: 'rgba(109, 94, 240, 0.06)',
+  accent: '#0EA5C4',
+  accentLight: 'rgba(14, 165, 196, 0.12)',
+  success: '#059669',
+  successLight: 'rgba(5, 150, 105, 0.12)',
+  danger: '#E11D48',
+  dangerLight: 'rgba(225, 29, 72, 0.10)',
+  warning: '#D97706',
+  warningLight: 'rgba(217, 119, 6, 0.12)',
+  star: '#F59E0B',
+  gradientStart: '#7C5CF6',
+  gradientEnd: '#22D3EE',
+  tabBar: 'rgba(247, 247, 251, 0.86)',
+  tabBarBorder: 'rgba(109, 94, 240, 0.18)',
+  overlay: 'rgba(21, 21, 31, 0.45)',
+  glassBg: 'rgba(255, 255, 255, 0.72)',
+  cardShadow: 'rgba(40, 35, 90, 0.12)',
+  onPrimary: '#FFFFFF',
 };
+
+export type ThemeColors = typeof DarkColors;
 
 export const Spacing = {
   xs: 4,
@@ -88,9 +100,9 @@ export const Spacing = {
 };
 
 export const Radius = {
-  sm: 4,
-  md: 12,
-  lg: 16,
+  sm: 10,
+  md: 14,
+  lg: 20,
   xl: 24,
   xxl: 32,
   full: 9999,
@@ -101,33 +113,34 @@ export const Shadows = {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 2,
   },
   md: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 14,
+    elevation: 5,
   },
   lg: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 8,
   },
   glow: {
-    shadowColor: '#3e90ff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 6,
+    shadowColor: '#8B7CF6',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
+    elevation: 8,
   },
 };
 
 export const Typography = {
+  font: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
   h1: { fontSize: 40, fontWeight: '700', letterSpacing: -0.8, lineHeight: 48 },
   h2: { fontSize: 32, fontWeight: '700', letterSpacing: -0.6, lineHeight: 40 },
   h3: { fontSize: 24, fontWeight: '600', letterSpacing: -0.2, lineHeight: 32 },
@@ -139,3 +152,18 @@ export const Typography = {
   label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, lineHeight: 16 },
   badge: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, lineHeight: 12 },
 };
+
+// Helper: resolve current dark/light state from app theme + system scheme.
+export function useIsDark(): boolean {
+  const theme = useAppStore((s) => s.theme);
+  const systemColorScheme = useColorScheme();
+  return theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
+}
+
+// Central hook: returns the active color set + a boolean for dark mode.
+// Use this everywhere instead of re-deriving isDark / importing two color objects.
+export function useTheme() {
+  const isDark = useIsDark();
+  const c = isDark ? DarkColors : LightColors;
+  return { isDark, c };
+}

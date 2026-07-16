@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, useColorScheme, Image, ScrollView,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -11,7 +11,7 @@ import { useScraper } from '../../src/hooks/useScraper';
 import { HistoryCard } from '../../src/components/HistoryCard';
 import { SearchRecord } from '../../src/types';
 import { useAppStore } from '../../src/store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../../src/constants/theme';
+import { Spacing, Radius, useTheme } from '../../src/constants/theme';
 import { ThemedConfirm } from '../../src/components/ThemedConfirm';
 
 export default function HistoryScreen() {
@@ -20,12 +20,10 @@ export default function HistoryScreen() {
   const searchStore = useSearchStore();
   const scraper = useScraper();
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
 
   const activeSearches = searchStore.activeSearches;
   const isResearching = activeSearches.length > 0;
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
   const [clearAllVisible, setClearAllVisible] = useState(false);
@@ -108,8 +106,9 @@ export default function HistoryScreen() {
                       style={[
                         styles.activeCard,
                         {
-                          backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card,
-                          borderColor: search.phase === 'error' ? c.danger + '80' : c.primary + '50',
+                          backgroundColor: c.card,
+                          borderColor: search.phase === 'error' ? c.danger + '60' : c.primary + '55',
+                          borderWidth: 1,
                         },
                       ]}
                     >
@@ -123,7 +122,7 @@ export default function HistoryScreen() {
                       <Text style={[styles.activeMeta, { color: c.textSecondary }]} numberOfLines={1}>
                         {search.filters.company} • {getEstimatedTimeText(search.phase)}
                       </Text>
-                      <View style={[styles.barBg, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+                      <View style={[styles.barBg, { backgroundColor: c.surfaceAlt }]}>
                         <View
                           style={[
                             styles.barFill,

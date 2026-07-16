@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, useColorScheme,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -9,7 +9,7 @@ import { useSearchStore } from '../src/store/searchStore';
 import { INDIA, getCountryByCode } from '../src/constants/countries';
 import { useAppStore } from '../src/store/appStore';
 import { formatSalary } from '../src/utils/currency';
-import { LightColors, DarkColors, Spacing, Radius } from '../src/constants/theme';
+import { Spacing, Radius, useTheme } from '../src/constants/theme';
 import { ConfidenceCard } from '../src/components/ConfidenceCard';
 import { SalaryCard } from '../src/components/SalaryCard';
 import { ProsConsCard } from '../src/components/ProsConsCard';
@@ -18,9 +18,7 @@ export default function ResultsScreen() {
   const router = useRouter();
   const { filters, finalResults, resetViewer } = useSearchStore();
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   const handleNewSearch = () => { resetViewer(); router.replace('/(tabs)'); };
   const handleBack = () => {
@@ -51,7 +49,7 @@ export default function ResultsScreen() {
               as a <Text style={{ fontWeight: '700', color: c.text }}>{filters.role}</Text>{' '}
               in <Text style={{ fontWeight: '700', color: c.text }}>{filters.country}</Text>.
             </Text>
-            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: c.primaryDark }]} onPress={handleNewSearch}>
+            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: c.primary }]} onPress={handleNewSearch}>
               <Ionicons name="refresh" size={16} color="#FFF" />
               <Text style={styles.primaryBtnText}>Try Again</Text>
             </TouchableOpacity>
@@ -73,7 +71,7 @@ export default function ResultsScreen() {
     <View style={[styles.root, { backgroundColor: c.bg }]}>
       <SafeAreaView edges={['top']} style={styles.safe}>
         {/* Navigation Shell */}
-        <View style={[styles.header, { borderBottomColor: c.border + '30' }]}>
+        <View style={[styles.header, { borderBottomColor: c.border }]}>
           <TouchableOpacity onPress={handleBack} style={styles.headerBtn}>
             <Ionicons name="chevron-back" size={22} color={c.primary} />
           </TouchableOpacity>
@@ -111,7 +109,7 @@ export default function ResultsScreen() {
           <ProsConsCard positives={finalResults.positives} negatives={finalResults.negatives} />
 
           {/* Research Insights — Dynamic data from scraping */}
-          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card, borderColor: isDark ? c.border : 'rgba(0, 0, 0, 0.05)' }]}>
+          <View style={[styles.glassCard, { backgroundColor: c.card, borderColor: c.border }]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="stats-chart-outline" size={18} color={c.accent} />
               <Text style={[styles.sectionTitle, { color: c.text }]}>Research Insights</Text>
@@ -150,7 +148,7 @@ export default function ResultsScreen() {
 
           {/* Research Details Action Button */}
           <TouchableOpacity
-            style={[styles.detailBtn, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : c.card, borderColor: isDark ? c.primary + '30' : 'rgba(0, 0, 0, 0.05)' }]}
+            style={[styles.detailBtn, { backgroundColor: c.card, borderColor: c.primary + '35' }]}
             onPress={() => router.push('/research-details' as any)}
             activeOpacity={0.85}
           >
@@ -225,7 +223,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  applyBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  applyBtnText: { fontSize: 14, fontWeight: '700' },
   glassCard: {
     borderRadius: 24,
     borderWidth: 1,
@@ -303,5 +301,5 @@ const styles = StyleSheet.create({
   noDataTitle: { fontSize: 22, fontWeight: '800', marginBottom: Spacing.md },
   noDataDesc: { fontSize: 14, textAlign: 'center', lineHeight: 21, marginBottom: Spacing.xxl },
   primaryBtn: { borderRadius: 9999, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xxl, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  primaryBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  primaryBtnText: { fontSize: 15, fontWeight: '700' },
 });

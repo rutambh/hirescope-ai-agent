@@ -1,15 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing } from '../constants/theme';
+import { Spacing, useTheme } from '../constants/theme';
 
 type Props = { rating: number | null; size?: number };
 
 export function RatingStars({ rating, size = 28 }: Props) {
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   if (rating === null || isNaN(rating)) {
     return (

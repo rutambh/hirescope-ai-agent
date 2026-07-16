@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, useColorScheme } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
+import { Spacing, Radius, useTheme } from '../constants/theme';
 
 type Props = {
   progress: number;
@@ -11,10 +11,8 @@ type Props = {
 
 export function ProgressBar({ progress, height = 5, showPercent = false }: Props) {
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
   const animValue = useRef(new Animated.Value(0)).current;
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   useEffect(() => {
     Animated.timing(animValue, { toValue: progress, duration: 500, useNativeDriver: false }).start();
@@ -24,7 +22,7 @@ export function ProgressBar({ progress, height = 5, showPercent = false }: Props
 
   return (
     <View style={styles.container}>
-      <View style={[styles.track, { height, backgroundColor: isDark ? '#1E1E3A' : '#E2E8F0' }]}>
+      <View style={[styles.track, { height, backgroundColor: c.surfaceAlt }]}>
         <Animated.View style={[styles.fill, { width, backgroundColor: c.primary }]} />
       </View>
       {showPercent && (

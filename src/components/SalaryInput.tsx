@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet, useColorScheme, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CountryConfig } from '../constants/countries';
 import { useAppStore } from '../store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../constants/theme';
+import { Spacing, Radius, useTheme } from '../constants/theme';
 
 type Props = {
   label: string;
@@ -15,9 +15,7 @@ type Props = {
 
 export function SalaryInput({ label, value, country, icon, onChange }: Props) {
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   const symbol = country ? country.currencySymbol : '';
   const suffix = country ? country.salaryFormat : '';
@@ -39,7 +37,7 @@ export function SalaryInput({ label, value, country, icon, onChange }: Props) {
         <Ionicons name={(icon || 'cash-outline') as any} size={13} color={c.textMuted} />
         <Text style={[styles.label, { color: c.textSecondary }]}>{label}</Text>
       </View>
-      <View style={[styles.inputRow, { backgroundColor: c.surfaceAlt, borderColor: c.primary + '30' }]}>
+      <View style={[styles.inputRow, { backgroundColor: c.surfaceAlt, borderColor: c.primaryFaint }]}>
         {symbol ? <Text style={[styles.symbol, { color: c.textMuted }]}>{symbol}</Text> : null}
         <TextInput
           style={[styles.input, { color: c.text }]}
@@ -50,7 +48,7 @@ export function SalaryInput({ label, value, country, icon, onChange }: Props) {
           onChangeText={handleChange}
         />
         {suffix ? (
-          <View style={[styles.badge, { backgroundColor: c.primaryLight, borderColor: c.primary + '30' }]}>
+          <View style={[styles.badge, { backgroundColor: c.primaryLight, borderColor: c.primaryFaint }]}>
             <Text style={[styles.badgeText, { color: c.primary }]}>{suffix}</Text>
           </View>
         ) : null}

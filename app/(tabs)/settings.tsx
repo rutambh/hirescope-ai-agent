@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking,
-  Platform, Modal, useColorScheme, PanResponder, Share
+  Platform, Modal, PanResponder, Share
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -10,7 +10,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useAppStore } from '../../src/store/appStore';
 import { useAIModel } from '../../src/hooks/useAIModel';
 import { APP_CONFIG } from '../../src/constants/config';
-import { LightColors, DarkColors, Spacing, Radius } from '../../src/constants/theme';
+import { DarkColors, LightColors, Spacing, Radius, useTheme } from '../../src/constants/theme';
 import { ThemedConfirm } from '../../src/components/ThemedConfirm';
 
 function formatBytes(bytes: number): string {
@@ -28,7 +28,6 @@ function formatSpeed(bytesPerSec: number): string {
 export default function SettingsScreen() {
   const router = useRouter();
   const { theme, setTheme, maxDomainsToScrape, setMaxDomainsToScrape } = useAppStore();
-  const systemColorScheme = useColorScheme();
   const aiModel = useAIModel();
   const [downloadConfirmVisible, setDownloadConfirmVisible] = useState(false);
   const [restartAlertVisible, setRestartAlertVisible] = useState(false);
@@ -116,8 +115,7 @@ export default function SettingsScreen() {
     }
   };
 
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const C = isDark ? DarkColors : LightColors;
+  const { isDark, c: C } = useTheme();
 
   const statusCfg: Record<string, { label: string; color: string; bg: string }> = {
     not_installed: { label: 'Not Installed', color: C.textMuted, bg: C.surfaceAlt },
@@ -135,7 +133,7 @@ export default function SettingsScreen() {
 
     return (
       <View style={[styles.aiCard, {
-        backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.surface,
+        backgroundColor: C.card,
       }]}>
         <View style={styles.aiHeader}>
           <View style={[styles.aiIcon, { backgroundColor: C.primaryLight }]}>
@@ -183,8 +181,8 @@ export default function SettingsScreen() {
             <Text style={[styles.progressBytes, { color: C.textMuted }]}>{formatBytes(downloadedBytes)} / {formatBytes(APP_CONFIG.modelExpectedSizeMb * 1024 * 1024)}</Text>
             <View style={styles.actionRow}>
               <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: C.primary }]} onPress={aiModel.resumeDownload}>
-                <Ionicons name="play" size={12} color={isDark ? '#051424' : '#FFF'} />
-                <Text style={[styles.primaryBtnText, { color: isDark ? '#051424' : '#FFF' }]}>Resume</Text>
+                <Ionicons name="play" size={12} color={C.onPrimary} />
+                <Text style={[styles.primaryBtnText, { color: C.onPrimary }]}>Resume</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.smallBtn, { backgroundColor: C.dangerLight }]} onPress={aiModel.cancelDownload}>
                 <Ionicons name="close" size={12} color={C.danger} />
@@ -236,8 +234,8 @@ export default function SettingsScreen() {
               </View>
             )}
             <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: C.primary }]} onPress={() => { aiModel.cancelDownload(); setDownloadConfirmVisible(true); }}>
-              <Ionicons name="refresh" size={12} color={isDark ? '#051424' : '#FFF'} />
-              <Text style={[styles.primaryBtnText, { color: isDark ? '#051424' : '#FFF' }]}>Retry</Text>
+              <Ionicons name="refresh" size={12} color={C.onPrimary} />
+              <Text style={[styles.primaryBtnText, { color: C.onPrimary }]}>Retry</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -273,7 +271,7 @@ export default function SettingsScreen() {
           {renderAI()}
 
           {/* Visual Theme */}
-          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.surface }]}>
+          <View style={[styles.glassCard, { backgroundColor: C.card }]}>
             <View style={styles.settingItem}>
               <Text style={[styles.settingLabel, { color: C.textSecondary }]}>Visual Theme</Text>
 
@@ -282,14 +280,14 @@ export default function SettingsScreen() {
                   style={[styles.themeOption, theme === 'dark' && { borderColor: C.primary, borderWidth: 2 }]}
                   onPress={() => setTheme('dark')}
                 >
-                  <View style={[styles.themePreview, { backgroundColor: '#051424' }]} />
+                  <View style={[styles.themePreview, { backgroundColor: DarkColors.bg }]} />
                   <Text style={[styles.themeText, { color: theme === 'dark' ? C.primary : C.text }]}>Midnight</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.themeOption, theme === 'light' && { borderColor: C.primary, borderWidth: 2 }]}
                   onPress={() => setTheme('light')}
                 >
-                  <View style={[styles.themePreview, { backgroundColor: '#f9f9f9', borderColor: '#e2e8f0', borderWidth: 1 }]} />
+                  <View style={[styles.themePreview, { backgroundColor: LightColors.bg, borderColor: LightColors.border, borderWidth: 1 }]} />
                   <Text style={[styles.themeText, { color: theme === 'light' ? C.primary : C.text }]}>Crystal</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -297,8 +295,8 @@ export default function SettingsScreen() {
                   onPress={() => setTheme('system')}
                 >
                   <View style={[styles.themePreview, { flexDirection: 'row', overflow: 'hidden' }]}>
-                    <View style={{ flex: 1, backgroundColor: '#051424' }} />
-                    <View style={{ flex: 1, backgroundColor: '#f9f9f9' }} />
+                    <View style={{ flex: 1, backgroundColor: DarkColors.bg }} />
+                    <View style={{ flex: 1, backgroundColor: LightColors.bg }} />
                   </View>
                   <Text style={[styles.themeText, { color: theme === 'system' ? C.primary : C.text }]}>Space</Text>
                 </TouchableOpacity>
@@ -307,7 +305,7 @@ export default function SettingsScreen() {
           </View>
 
           {/* Scrape Domain Limit */}
-          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.surface }]}>
+          <View style={[styles.glassCard, { backgroundColor: C.card }]}>
             <View style={styles.sliderSection}>
               <View style={styles.sliderHeader}>
                 <Text style={[styles.sliderLabel, { color: C.textSecondary }]}>Search Domain Limit</Text>
@@ -331,7 +329,7 @@ export default function SettingsScreen() {
           </View>
 
           {/* System & Support */}
-          <View style={[styles.glassCard, { backgroundColor: isDark ? 'rgba(18, 33, 49, 0.4)' : C.surface }]}>
+          <View style={[styles.glassCard, { backgroundColor: C.card }]}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="settings-outline" size={18} color={C.textSecondary} />
               <Text style={[styles.sectionTitle, { color: C.text }]}>System & Support</Text>
@@ -387,7 +385,7 @@ export default function SettingsScreen() {
                   <Text style={[styles.smallBtnText, { color: C.text }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: C.primary }]} onPress={handleStartDownload}>
-                  <Text style={[styles.primaryBtnText, { color: isDark ? '#051424' : '#FFF' }]}>Download</Text>
+                  <Text style={[styles.primaryBtnText, { color: C.onPrimary }]}>Download</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -613,7 +611,7 @@ const styles = StyleSheet.create({
   smallBtn: { flex: 1, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
   smallBtnText: { fontSize: 13, fontWeight: '600' },
   primaryBtn: { flex: 1, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
-  primaryBtnText: { color: '#080716', fontSize: 13, fontWeight: '700' },
+  primaryBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   errorBox: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, borderRadius: Radius.md, marginBottom: Spacing.md, gap: Spacing.sm },
   errorText: { fontSize: 12, flex: 1 },
   linkRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.md, gap: Spacing.md },

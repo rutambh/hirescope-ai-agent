@@ -1,22 +1,20 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, useColorScheme,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSearchStore } from '../src/store/searchStore';
 import { useAppStore } from '../src/store/appStore';
-import { LightColors, DarkColors, Spacing, Radius } from '../src/constants/theme';
+import { Spacing, Radius, useTheme } from '../src/constants/theme';
 
 export default function ResearchDetailsScreen() {
   const router = useRouter();
   const { live } = useLocalSearchParams<{ live?: string }>();
   const searchStore = useSearchStore();
   const { theme } = useAppStore();
-  const systemColorScheme = useColorScheme();
-  const isDark = theme === 'dark' || (theme === 'system' && systemColorScheme === 'dark');
-  const c = isDark ? DarkColors : LightColors;
+  const { isDark, c } = useTheme();
 
   const isLive = live === 'true';
   const activeSearches = searchStore.activeSearches;
@@ -86,7 +84,7 @@ export default function ResearchDetailsScreen() {
               activeOpacity={0.85}
             >
               <Ionicons name="bar-chart-outline" size={18} color="#ffffff" />
-              <Text style={[styles.viewResultsText, { color: '#ffffff' }]}>View Results</Text>
+              <Text style={[styles.viewResultsText, { color: c.onPrimary }]}>View Results</Text>
             </TouchableOpacity>
           )}
 
