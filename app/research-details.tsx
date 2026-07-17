@@ -76,17 +76,7 @@ export default function ResearchDetailsScreen() {
             )}
           </View>
 
-          {/* ── View Results CTA (visible once a completed research has results) ── */}
-          {finalResults && (
-            <TouchableOpacity
-              onPress={() => router.push('/results')}
-              style={[styles.viewResultsBtn, { backgroundColor: c.primary }]}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="bar-chart-outline" size={18} color="#ffffff" />
-              <Text style={[styles.viewResultsText, { color: c.onPrimary }]}>View Results</Text>
-            </TouchableOpacity>
-          )}
+
 
           {/* ── Scraped Pages ── */}
           <Text style={[styles.sectionLabel, { color: c.textMuted }]}>Searched Pages ({rawUrls.length})</Text>

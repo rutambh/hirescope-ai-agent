@@ -13,10 +13,11 @@ type Props = {
   min?: number;
   max?: number;
   icon?: string;
+  disabled?: boolean;
   onChange: (val: number) => void;
 };
 
-export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChange }: Props) {
+export function ExperienceSlider({ label, value, min = 1, max = 30, icon, disabled = false, onChange }: Props) {
   const { theme } = useAppStore();
   const { isDark, c } = useTheme();
 
@@ -37,10 +38,10 @@ export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChan
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e: GestureResponderEvent) => { updateValue(e.nativeEvent.pageX); },
-      onPanResponderMove: (e: GestureResponderEvent) => { updateValue(e.nativeEvent.pageX); },
+      onStartShouldSetPanResponder: () => !disabled,
+      onMoveShouldSetPanResponder: () => !disabled,
+      onPanResponderGrant: (e: GestureResponderEvent) => { if (!disabled) updateValue(e.nativeEvent.pageX); },
+      onPanResponderMove: (e: GestureResponderEvent) => { if (!disabled) updateValue(e.nativeEvent.pageX); },
     })
   ).current;
 
@@ -51,39 +52,41 @@ export function ExperienceSlider({ label, value, min = 1, max = 30, icon, onChan
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.labelRow}>
-          <Ionicons name={(icon || 'time-outline') as any} size={14} color={c.textMuted} />
-          <Text style={[styles.label, { color: c.textSecondary }]}>{label}</Text>
+          <Ionicons name={(icon || 'time-outline') as any} size={14} color={disabled ? c.textMuted : c.textMuted} />
+          <Text style={[styles.label, { color: disabled ? c.textMuted : c.textSecondary }]}>{label}</Text>
         </View>
-        <View style={[styles.pill, { backgroundColor: c.primaryLight }]}>
-          <Text style={[styles.pillText, { color: c.primary }]}>{value} {value === 1 ? 'yr' : 'yrs'}</Text>
+        <View style={[styles.pill, { backgroundColor: disabled ? c.surfaceAlt : c.primaryLight }]}>
+          <Text style={[styles.pillText, { color: disabled ? c.textMuted : c.primary }]}>{value} {value === 1 ? 'yr' : 'yrs'}</Text>
         </View>
       </View>
 
       <View style={styles.sliderRow}>
         <TouchableOpacity
           style={[styles.btn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+          disabled={disabled}
           onPress={() => onChange(Math.max(min, value - 1))}
         >
-          <Ionicons name="remove" size={18} color={c.text} />
+          <Ionicons name="remove" size={18} color={disabled ? c.textMuted : c.text} />
         </TouchableOpacity>
 
         <View
           ref={containerRef}
-          style={styles.trackContainer}
+          style={[styles.trackContainer, disabled && { opacity: 0.4 }]}
           onLayout={handleLayout}
           {...panResponder.panHandlers}
         >
           <View style={[styles.trackBg, { backgroundColor: c.surfaceAlt }]}>
-            <View style={[styles.trackFill, { width: `${fillPct}%`, backgroundColor: c.primary }]} />
+            <View style={[styles.trackFill, { width: `${fillPct}%`, backgroundColor: disabled ? c.textMuted : c.primary }]} />
           </View>
-          <View style={[styles.thumb, { left: `${fillPct}%`, borderColor: c.primary, backgroundColor: c.surface, shadowColor: c.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 }]} />
+          <View style={[styles.thumb, { left: `${fillPct}%`, borderColor: disabled ? c.textMuted : c.primary, backgroundColor: c.surface, shadowColor: disabled ? c.textMuted : c.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 }]} />
         </View>
 
         <TouchableOpacity
           style={[styles.btn, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
+          disabled={disabled}
           onPress={() => onChange(Math.min(max, value + 1))}
         >
-          <Ionicons name="add" size={18} color={c.text} />
+          <Ionicons name="add" size={18} color={disabled ? c.textMuted : c.text} />
         </TouchableOpacity>
       </View>
     </View>

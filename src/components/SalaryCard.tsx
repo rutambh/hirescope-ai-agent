@@ -25,9 +25,9 @@ export function SalaryCard({ results, filters, country }: Props) {
   const averageSalary = hasSalaryData ? (displayMin + displayMax) / 2 : 0;
   const averageFormatted = formatSalary(averageSalary, country);
 
-  const averageHikePercent = hasSalaryData
+  const averageHikePercent = hasSalaryData && filters.currentSalary > 0
     ? Math.max(0, Math.round(((averageSalary - filters.currentSalary) / filters.currentSalary) * 100))
-    : 0;
+    : null;
 
   return (
     <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
@@ -92,14 +92,18 @@ export function SalaryCard({ results, filters, country }: Props) {
               <View style={styles.statLabelWrap}>
                 <Text style={[styles.statLabel, { color: c.textMuted }]}>Average Hike</Text>
               </View>
-              <Text style={[styles.statValue, { color: c.success }]}>+{averageHikePercent}%</Text>
+              <Text style={[styles.statValue, { color: c.success }]}>
+                {averageHikePercent === null ? 'N/A' : `+${averageHikePercent}%`}
+              </Text>
             </View>
           </View>
 
           <View style={styles.detailRow}>
             <Ionicons name="briefcase-outline" size={14} color={c.textMuted} />
             <Text style={[styles.detailText, { color: c.textSecondary }]}>
-              {filters.experience} {filters.experience === 1 ? 'yr' : 'yrs'} experience
+              {filters.overall
+                ? 'All experience levels (overall range)'
+                : `${filters.experience} ${filters.experience === 1 ? 'yr' : 'yrs'} experience`}
             </Text>
           </View>
         </>

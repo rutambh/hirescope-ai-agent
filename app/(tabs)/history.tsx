@@ -13,6 +13,7 @@ import { SearchRecord } from '../../src/types';
 import { useAppStore } from '../../src/store/appStore';
 import { Spacing, Radius, useTheme } from '../../src/constants/theme';
 import { ThemedConfirm } from '../../src/components/ThemedConfirm';
+import { useResearchQueueStore } from '../../src/store/researchQueueStore';
 
 export default function HistoryScreen() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function HistoryScreen() {
   const searchStore = useSearchStore();
   const scraper = useScraper();
   const { theme } = useAppStore();
+  const queueStore = useResearchQueueStore();
 
   const activeSearches = searchStore.activeSearches;
   const isResearching = activeSearches.length > 0;
@@ -97,78 +99,109 @@ export default function HistoryScreen() {
                 </Text>
               </View>
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeScroll}>
-                  {activeSearches.map((search) => (
-                    <TouchableOpacity
-                      key={search.id}
-                      activeOpacity={0.7}
-                      onPress={() => router.push('/research-details?live=true')}
-                      style={[
-                        styles.activeCard,
-                        {
-                          backgroundColor: c.card,
-                          borderColor: search.phase === 'error' ? c.danger + '60' : c.primary + '55',
-                          borderWidth: 1,
-                        },
-                      ]}
-                    >
-                      <View style={styles.activeCardTop}>
-                        <View style={{ width: 36 }} />
-                        <View style={{ width: 38 }} />
-                      </View>
-                      <Text style={[styles.activeTitle, { color: c.text }]} numberOfLines={1}>
-                        {search.filters.role}
-                      </Text>
-                      <Text style={[styles.activeMeta, { color: c.textSecondary }]} numberOfLines={1}>
-                        {search.filters.company} • {getEstimatedTimeText(search.phase)}
-                      </Text>
-                      <View style={[styles.barBg, { backgroundColor: c.surfaceAlt }]}>
-                        <View
-                          style={[
-                            styles.barFill,
-                            {
-                              backgroundColor: search.phase === 'error' ? c.danger : c.primary,
-                              width: `${search.progressPercent}%`,
-                            },
-                          ]}
-                        />
-                      </View>
-                      <Text style={[styles.progressUnder, { color: c.textMuted }]}>{Math.round(search.progressPercent)}%</Text>
-                      <View style={styles.activeCardFooter}>
-                        <Text
-                          style={[
-                            styles.avatarCount,
-                            { color: search.phase === 'error' ? c.danger : c.primary },
-                          ]}
-                        >
-                          {search.phase === 'error' ? 'Stopped' : 'Live Search'}
-                        </Text>
-                        <View style={styles.actionsWrap}>
-                          {search.phase === 'error' ? (
-                            <>
-                              <TouchableOpacity
-                                style={[styles.stopBtn, { backgroundColor: c.primaryLight, marginRight: 8 }]}
-                                onPress={() => handleRetry(search.id)}
-                              >
-                                <Ionicons name="refresh" size={16} color={c.primary} />
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={[styles.stopBtn, { backgroundColor: c.dangerLight }]}
-                                onPress={() => handleDismissActive(search.id)}
-                              >
-                                <Ionicons name="trash-outline" size={16} color={c.danger} />
-                              </TouchableOpacity>
-                            </>
-                          ) : (
-                            <TouchableOpacity style={[styles.stopBtn, { backgroundColor: c.dangerLight }]} onPress={handleStop}>
-                              <Ionicons name="stop" size={16} color={c.danger} />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-              </ScrollView>
+              <View style={styles.activeScroll}>
+                   {activeSearches.map((search) => {
+                     const isPaused = queueStore.activeSearchId === search.id && queueStore.isPaused;
+                     return (
+                       <TouchableOpacity
+                         key={search.id}
+                         activeOpacity={0.7}
+                         onPress={() => {
+                           if (isPaused) {
+                             scraper.resumeScrape();
+                           } else {
+                             router.push('/research-details?live=true');
+                           }
+                         }}
+                         style={[
+                           styles.activeCard,
+                           {
+                             backgroundColor: c.card,
+                             borderColor: search.phase === 'error' ? c.danger + '60' : (isPaused ? c.textMuted + '60' : c.primary + '55'),
+                             borderWidth: 1,
+                             borderStyle: isPaused ? 'dashed' : 'solid',
+                           },
+                         ]}
+                       >
+                         <View style={styles.activeCardTop}>
+                           <View style={{ width: 36 }} />
+                           <View style={{ width: 38 }} />
+                         </View>
+                         <Text style={[styles.activeTitle, { color: c.text }]} numberOfLines={1}>
+                           {search.filters.role}
+                         </Text>
+                         <Text style={[styles.activeMeta, { color: c.textSecondary }]} numberOfLines={1}>
+                           {search.filters.company} • {isPaused ? 'Paused — tap to resume' : getEstimatedTimeText(search.phase)}
+                         </Text>
+                         <View style={[styles.barBg, { backgroundColor: c.surfaceAlt }]}>
+                           <View
+                             style={[
+                               styles.barFill,
+                               {
+                                 backgroundColor: search.phase === 'error' ? c.danger : (isPaused ? c.textMuted : c.primary),
+                                 width: `${search.progressPercent}%`,
+                               },
+                             ]}
+                           />
+                         </View>
+                         <Text style={[styles.progressUnder, { color: c.textMuted }]}>
+                           {search.phase === 'extracting'
+                             ? `${search.urlsProcessed} of ${search.urlsDiscovered} sources (${Math.round(search.progressPercent)}%)`
+                             : `${Math.round(search.progressPercent)}%`}
+                         </Text>
+                         <View style={styles.activeCardFooter}>
+                           <Text
+                             style={[
+                               styles.avatarCount,
+                               { color: search.phase === 'error' ? c.danger : (isPaused ? c.textMuted : c.primary) },
+                             ]}
+                           >
+                             {search.phase === 'error' ? 'Stopped' : (isPaused ? 'Paused' : 'Live Search')}
+                           </Text>
+                           <View style={styles.actionsWrap}>
+                             {search.phase === 'error' ? (
+                               <>
+                                 <TouchableOpacity
+                                   style={[styles.stopBtn, { backgroundColor: c.primaryLight, marginRight: 8 }]}
+                                   onPress={() => handleRetry(search.id)}
+                                 >
+                                   <Ionicons name="refresh" size={16} color={c.primary} />
+                                 </TouchableOpacity>
+                                 <TouchableOpacity
+                                   style={[styles.stopBtn, { backgroundColor: c.dangerLight }]}
+                                   onPress={() => handleDismissActive(search.id)}
+                                 >
+                                   <Ionicons name="trash-outline" size={16} color={c.danger} />
+                                 </TouchableOpacity>
+                               </>
+                             ) : (
+                               <>
+                                 {isPaused ? (
+                                   <TouchableOpacity
+                                     style={[styles.stopBtn, { backgroundColor: c.primaryLight, marginRight: 8 }]}
+                                     onPress={() => scraper.resumeScrape()}
+                                   >
+                                     <Ionicons name="play" size={16} color={c.primary} />
+                                   </TouchableOpacity>
+                                 ) : (
+                                   <TouchableOpacity
+                                     style={[styles.stopBtn, { backgroundColor: c.primaryLight, marginRight: 8 }]}
+                                     onPress={() => useResearchQueueStore.getState().setPaused(true)}
+                                   >
+                                     <Ionicons name="pause" size={16} color={c.primary} />
+                                   </TouchableOpacity>
+                                 )}
+                                 <TouchableOpacity style={[styles.stopBtn, { backgroundColor: c.dangerLight }]} onPress={handleStop}>
+                                   <Ionicons name="stop" size={16} color={c.danger} />
+                                 </TouchableOpacity>
+                               </>
+                             )}
+                           </View>
+                         </View>
+                       </TouchableOpacity>
+                     );
+                   })}
+              </View>
             </View>
           )}
 
@@ -323,10 +356,10 @@ const styles = StyleSheet.create({
   activeScroll: {
     paddingVertical: Spacing.xs,
     gap: 12,
-    flexDirection: 'row',
+    width: '100%',
   },
   activeCard: {
-    width: 260,
+    width: '100%',
     borderRadius: 24,
     borderWidth: 1,
     padding: Spacing.md,

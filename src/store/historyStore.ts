@@ -10,11 +10,12 @@ type HistoryStore = {
   addSearch: (record: SearchRecord) => void;
   deleteSearch: (id: string) => void;
   clearAll: () => void;
+  getCachedRecord: (company: string, role: string) => SearchRecord | undefined;
 };
 
 export const useHistoryStore = create<HistoryStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       searches: [],
 
       addSearch: (record) => set((state) => {
@@ -39,6 +40,19 @@ export const useHistoryStore = create<HistoryStore>()(
       })),
 
       clearAll: () => set({ searches: [] }),
+
+      getCachedRecord: (company, role) => {
+        const searches = get().searches;
+        if (!Array.isArray(searches)) return undefined;
+
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        
+        return searches.find(s => 
+          s.filters.company.toLowerCase().trim() === company.toLowerCase().trim() &&
+          s.filters.role.toLowerCase().trim() === role.toLowerCase().trim() &&
+          new Date(s.timestamp).getTime() > sevenDaysAgo
+        );
+      },
     }),
     {
       name: 'hirescope-history-store',

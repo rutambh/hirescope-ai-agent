@@ -78,7 +78,9 @@ export function FilterDropdown({ label, selectedValue, options, icon, onSelect }
               >
                 <View>
                   <Text style={[styles.optionName, { color: c.text }]}>{item.name}</Text>
-                  <Text style={[styles.optionSub, { color: c.textMuted }]}>{item.currency} ({item.currencyCode})</Text>
+                  {item.currency ? (
+                    <Text style={[styles.optionSub, { color: c.textMuted }]}>{item.currency} ({item.currencyCode})</Text>
+                  ) : null}
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
               </TouchableOpacity>

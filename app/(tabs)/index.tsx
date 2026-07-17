@@ -11,7 +11,8 @@ import { ExperienceSlider } from '../../src/components/ExperienceSlider';
 import { SalaryInput } from '../../src/components/SalaryInput';
 import { useAppStore } from '../../src/store/appStore';
 import { useAIModelStore } from '../../src/store/aiModelStore';
-import { INDIA, COUNTRIES, CountryConfig } from '../../src/constants/countries';
+import { useHistoryStore } from '../../src/store/historyStore';
+import { INDIA, WORLDWIDE, COUNTRIES, CountryConfig } from '../../src/constants/countries';
 import { Spacing, Radius, useTheme } from '../../src/constants/theme';
 import { ThemedConfirm } from '../../src/components/ThemedConfirm';
 import { FilterDropdown } from '../../src/components/FilterDropdown';
@@ -20,16 +21,19 @@ import { APP_ICON } from '../../src/constants/config';
 export default function SearchScreen() {
   const router = useRouter();
   const searchStore = useSearchStore();
-  const { theme, keepScreenOnDefault, setKeepScreenOnDefault } = useAppStore();
+  const { theme, keepScreenOnDefault, setKeepScreenOnDefault, overallDefault, setOverallDefault } = useAppStore();
   const { status: aiStatus } = useAIModelStore();
   const [company, setCompany] = useState('');
   const [role, setRole] = useState('');
   const [experience, setExperience] = useState(5);
+  const [overall, setOverall] = useState(overallDefault);
   const [salary, setSalary] = useState('');
   const [countryCfg, setCountryCfg] = useState<CountryConfig>(INDIA);
+  const isWorldwide = countryCfg.code === WORLDWIDE.code;
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [invalidSalaryVisible, setInvalidSalaryVisible] = useState(false);
   const [researchMode, setResearchMode] = useState<'deep' | 'narrow'>('deep');
+  const [showNarrowConfirmModal, setShowNarrowConfirmModal] = useState(false);
 
   const activeSearches = searchStore.activeSearches;
   const isResearching = activeSearches.length > 0;
@@ -39,7 +43,7 @@ export default function SearchScreen() {
   const isFormValid =
     company.trim().length >= 2 &&
     role.trim().length >= 2 &&
-    salary.trim().length > 0;
+    (isWorldwide || salary.trim().length > 0);
 
   const launchSearch = (numericSalaryVal?: number) => {
     const numericSalary = numericSalaryVal ?? parseFloat(salary);
@@ -50,6 +54,7 @@ export default function SearchScreen() {
       company: company.trim(),
       role: role.trim(),
       experience,
+      overall,
       currentSalary: numericSalary,
       currency: countryCfg.currency,
       currencyCode: countryCfg.currencyCode,
@@ -59,10 +64,18 @@ export default function SearchScreen() {
     router.replace('/(tabs)/history');
   };
 
+  const handleProceedWithSearch = (numericSalary: number) => {
+    if (researchMode === 'narrow') {
+      setShowNarrowConfirmModal(true);
+    } else {
+      launchSearch(numericSalary);
+    }
+  };
+
   const handleStart = () => {
     if (!isFormValid) return;
     const numericSalary = parseFloat(salary);
-    if (isNaN(numericSalary) || numericSalary <= 0) {
+    if (!isWorldwide && (isNaN(numericSalary) || numericSalary <= 0)) {
       setInvalidSalaryVisible(true);
       return;
     }
@@ -72,7 +85,7 @@ export default function SearchScreen() {
       return;
     }
 
-    launchSearch(numericSalary);
+    handleProceedWithSearch(isWorldwide ? 0 : numericSalary);
   };
 
   return (
@@ -185,7 +198,7 @@ export default function SearchScreen() {
                     <Text style={[styles.modeTitle, { color: researchMode === 'deep' ? c.primary : c.text }]}>Deep Research</Text>
                   </View>
                   <Text style={[styles.modeDesc, { color: c.textSecondary }]}>
-                    15–20 min budget. Scrapes core + WebView sources for maximum coverage.
+                    15–20 minutes on average.
                   </Text>
                 </TouchableOpacity>
 
@@ -207,26 +220,31 @@ export default function SearchScreen() {
                     <Text style={[styles.modeTitle, { color: researchMode === 'narrow' ? c.primary : c.text }]}>Narrow Research</Text>
                   </View>
                   <Text style={[styles.modeDesc, { color: c.textSecondary }]}>
-                    2–3 min budget. Fast native requests only. Skips bot-blocked sites.
+                    2–3 minutes on average.
                   </Text>
                 </TouchableOpacity>
               </View>
 
               {researchMode === 'deep' && (
-                <TouchableOpacity
-                  style={styles.keepScreenOnRow}
-                  onPress={() => setKeepScreenOnDefault(!keepScreenOnDefault)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons
-                    name={keepScreenOnDefault ? "checkbox" : "square-outline"}
-                    size={20}
-                    color={c.primary}
-                  />
-                  <Text style={[styles.keepScreenOnText, { color: c.textSecondary }]}>
-                    Keep screen on — prevents auto-lock during research. Please stay on this screen; switching apps will pause the search.
+                <>
+                  <TouchableOpacity
+                    style={styles.keepScreenOnRow}
+                    onPress={() => setKeepScreenOnDefault(!keepScreenOnDefault)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={keepScreenOnDefault ? "checkbox" : "square-outline"}
+                      size={20}
+                      color={c.primary}
+                    />
+                    <Text style={[styles.keepScreenOnText, { color: c.textSecondary }]}>
+                      <Text style={{ fontWeight: '700' }}>Keep screen on</Text> — prevents auto-lock during research.
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.keepScreenOnInfo, { color: c.textMuted }]}>
+                    Please stay on this screen; switching apps will pause the search, but your progress is saved and picks up right where it left off.
                   </Text>
-                </TouchableOpacity>
+                </>
               )}
             </View>
 
@@ -241,15 +259,48 @@ export default function SearchScreen() {
                 icon="ribbon-outline"
                 value={experience}
                 onChange={setExperience}
+                disabled={overall}
               />
+
+              <TouchableOpacity
+                style={styles.overallRow}
+                onPress={() => {
+                  const next = !overall;
+                  setOverall(next);
+                  setOverallDefault(next);
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={overall ? "checkbox" : "square-outline"}
+                  size={20}
+                  color={c.primary}
+                />
+                <Text style={[styles.overallRowText, { color: c.textSecondary }]}>
+                  Overall — ignore experience level
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={[styles.overallInfo, { color: c.textMuted }]}>
+                {overall
+                  ? 'Showing the overall salary range across all experience levels.'
+                  : 'Salary range will be focused on this experience level only.'}
+              </Text>
 
               <SalaryInput
                 label="Current Salary"
                 icon="cash-outline"
                 value={salary}
                 country={countryCfg}
+                disabled={isWorldwide}
                 onChange={setSalary}
               />
+
+              {isWorldwide && (
+                <Text style={[styles.worldwideInfo, { color: c.textMuted }]}>
+                  Worldwide mode searches every region at once, so we can't compare against one local salary. This field is skipped and you'll see the overall global pay range instead.
+                </Text>
+              )}
             </View>
 
             {/* Action Button */}
@@ -305,9 +356,32 @@ export default function SearchScreen() {
         onConfirm={() => setInvalidSalaryVisible(false)}
       />
 
+
+
+      <ThemedConfirm
+        visible={showNarrowConfirmModal}
+        title="Narrow Research Warning"
+        message="Narrow mode runs quickly (2-3 mins) but only scrapes fast-lane sources. Results may be less accurate or incomplete due to fewer sources."
+        confirmLabel="Proceed"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          setShowNarrowConfirmModal(false);
+          launchSearch(parseFloat(salary));
+        }}
+        onCancel={() => setShowNarrowConfirmModal(false)}
+      />
+
     </View>
   );
 }
+
+const getDaysAgo = (timestamp: string) => {
+  const diffMs = Date.now() - new Date(timestamp).getTime();
+  const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return '1 day';
+  return `${diffDays} days`;
+};
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -411,6 +485,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flex: 1,
     lineHeight: 16,
+  },
+  keepScreenOnInfo: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: Spacing.xs,
+    paddingHorizontal: 4,
+    lineHeight: 15,
+  },
+  overallRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+    paddingHorizontal: 4,
+  },
+  overallRowText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+    lineHeight: 16,
+  },
+  overallInfo: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.md,
+    paddingHorizontal: 4,
+    lineHeight: 15,
+  },
+  worldwideInfo: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: Spacing.xs,
+    paddingHorizontal: 4,
+    lineHeight: 15,
   },
 });
 

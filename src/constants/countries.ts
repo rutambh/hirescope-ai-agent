@@ -21,9 +21,21 @@ export const INDIA: CountryConfig = {
   placeholder: '7 LPA only'
 };
 
+// Worldwide — research is not scoped to a single country/region.
+export const WORLDWIDE: CountryConfig = {
+  name: 'All Over World',
+  code: 'WW',
+  currency: '',
+  currencyCode: '',
+  currencySymbol: '',
+  salaryFormat: 'per year',
+  placeholder: '120k'
+};
+
 // Full country list for the selector. `salaryFormat` MUST be one of the three
 // values handled by dataExtractor.ts / currency.ts: 'LPA' | 'per year' | 'per month'.
 export const COUNTRIES: CountryConfig[] = [
+  WORLDWIDE,
   INDIA,
   {
     name: 'United States',

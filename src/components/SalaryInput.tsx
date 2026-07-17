@@ -10,15 +10,21 @@ type Props = {
   value: string;
   country: CountryConfig | null;
   icon?: string;
+  disabled?: boolean;
   onChange: (val: string) => void;
 };
 
-export function SalaryInput({ label, value, country, icon, onChange }: Props) {
+export function SalaryInput({ label, value, country, icon, disabled = false, onChange }: Props) {
   const { theme } = useAppStore();
   const { isDark, c } = useTheme();
 
   const symbol = country ? country.currencySymbol : '';
-  const suffix = country ? country.salaryFormat : '';
+  const suffix = country
+    ? country.salaryFormat
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ')
+    : '';
   const placeholder = '7';
 
   const handleChange = (text: string) => {
@@ -32,7 +38,7 @@ export function SalaryInput({ label, value, country, icon, onChange }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, disabled && { opacity: 0.45 }]}>
       <View style={styles.labelRow}>
         <Ionicons name={(icon || 'cash-outline') as any} size={13} color={c.textMuted} />
         <Text style={[styles.label, { color: c.textSecondary }]}>{label}</Text>
@@ -45,6 +51,7 @@ export function SalaryInput({ label, value, country, icon, onChange }: Props) {
           placeholderTextColor={c.textMuted}
           keyboardType="numeric"
           value={value}
+          editable={!disabled}
           onChangeText={handleChange}
         />
         {suffix ? (

@@ -11,11 +11,13 @@ import {
 } from '../hooks/useDomainScraper';
 import { APP_CONFIG } from '../constants/config';
 import { logger } from '../utils/logger';
+import { useResearchQueueStore } from '../store/researchQueueStore';
 
 export function BackgroundScraper() {
   const activeRequest = useActiveWebViewRequest();
   const webViewRef = useRef<WebView>(null);
   const activeSearches = useSearchStore((s) => s.activeSearches);
+  const isPaused = useResearchQueueStore((s) => s.isPaused);
   const scraper = useScraper();
   const startedRef = useRef(false);
 
@@ -23,15 +25,15 @@ export function BackgroundScraper() {
   const phase = latestSearch?.phase ?? 'idle';
 
   useEffect(() => {
-    if ((phase === 'searching' || phase === 'extracting') && !startedRef.current) {
+    if ((phase === 'searching' || phase === 'extracting') && !isPaused && !startedRef.current) {
       startedRef.current = true;
       scraper.runScrape().catch((err: any) => {
         console.error('BackgroundScraper error:', err);
       });
-    } else if (phase === 'idle' || phase === 'complete' || phase === 'error') {
+    } else if (phase === 'idle' || phase === 'complete' || phase === 'error' || isPaused) {
       startedRef.current = false;
     }
-  }, [phase, scraper]);
+  }, [phase, isPaused, scraper]);
 
   const handleLoadEnd = () => {
     if (!activeRequest || !webViewRef.current) return;

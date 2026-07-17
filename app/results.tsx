@@ -118,10 +118,15 @@ export default function ResultsScreen() {
               <View style={[styles.pulseCard, { backgroundColor: isDark ? c.surfaceAlt : 'rgba(53, 37, 205, 0.03)' }]}>
                 <Text style={[styles.pulseLabel, { color: c.accent }]}>DATA CONFIDENCE</Text>
                 <View style={styles.pulseValueRow}>
-                  <Text style={[styles.pulseValue, { color: c.text }]}>
+                  <Text
+                    style={[styles.pulseValue, { color: c.text }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >
                     {finalResults.confidence === 'high' ? 'Strong' : finalResults.confidence === 'medium' ? 'Moderate' : finalResults.confidence === 'low' ? 'Limited' : 'Sparse'}
                   </Text>
-                  <Ionicons name="shield-checkmark-outline" size={20} color={c.primary} />
+                  <Ionicons name="shield-checkmark-outline" size={16} color={c.primary} style={{ flexShrink: 0 }} />
                 </View>
                 <Text style={[styles.pulseDesc, { color: c.textSecondary }]}>
                   {finalResults.sourcesCount} sources from {finalResults.domainsScraped} domains
@@ -130,10 +135,15 @@ export default function ResultsScreen() {
               <View style={[styles.pulseCard, { backgroundColor: isDark ? c.surfaceAlt : 'rgba(53, 37, 205, 0.03)' }]}>
                 <Text style={[styles.pulseLabel, { color: c.accent }]}>EMPLOYEE RATING</Text>
                 <View style={styles.pulseValueRow}>
-                  <Text style={[styles.pulseValue, { color: c.text }]}>
+                  <Text
+                    style={[styles.pulseValue, { color: c.text }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >
                     {finalResults.rating ? finalResults.rating.toFixed(1) : 'N/A'}
                   </Text>
-                  <Ionicons name="star" size={18} color={c.primary} />
+                  <Ionicons name="star" size={16} color={c.primary} style={{ flexShrink: 0 }} />
                 </View>
                 <Text style={[styles.pulseDesc, { color: c.textSecondary }]}>
                   {finalResults.rating
@@ -280,8 +290,19 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
   },
   pulseLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1 },
-  pulseValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: Spacing.xs },
-  pulseValue: { fontSize: 24, fontWeight: '800' },
+  pulseValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: Spacing.xs,
+    gap: 4,
+  },
+  pulseValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    flex: 1,
+    flexShrink: 1,
+  },
   pulseDesc: { fontSize: 11, lineHeight: 15 },
   detailBtn: {
     flexDirection: 'row',

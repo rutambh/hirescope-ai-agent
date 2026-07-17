@@ -33,7 +33,7 @@ CONTEXT:
 Company: ${filters.company}
 Role: ${filters.role}
 Location: ${location}
-Target Experience: ${filters.experience} years
+${filters.overall ? 'Target Experience: All experience levels (overall range)' : `Target Experience: ${filters.experience} years`}
 Salary Format: ${filters.salaryFormat}
 Current Salary: ${filters.currentSalary}
 Pages scraped: ${pageCount}
@@ -61,7 +61,7 @@ FIELD RULES:
   Per month: e.g. 15000 means 15,000/month.
   If you see "12-18 LPA", set salaryMin: 12, salaryMax: 18.
   If you see a single number like "15 LPA", set both salaryMin and salaryMax to 15.
-  IMPORTANT: Only include salary data that is specifically for the "${filters.role}" role with around ${filters.experience} years of experience or closely related roles. Ignore generic company-wide salary data or salaries for vastly different experience levels if specific data is available.
+  IMPORTANT: Only include salary data that is specifically for the "${filters.role}" role${filters.overall ? '' : ` with around ${filters.experience} years of experience`} or closely related roles.${filters.overall ? ' Include the overall salary range across all experience levels.' : ' Ignore generic company-wide salary data or salaries for vastly different experience levels if specific data is available.'}
 - pros: Positive employee feedback themes (max 10, each 3-8 words). Group similar sentiments. Examples: "Good work-life balance", "Strong learning culture", "Competitive pay".
 - cons: Negative employee feedback themes (max 10, each 3-8 words). Group similar sentiments. Examples: "Poor management", "Long working hours", "Limited growth".
 - snippets: Factual quotes or statements from reviews about pay, culture, or experience (max 5, each 10-50 words). Prefer direct statements like "Average salary for this role is 15 LPA" over vague ones.
@@ -113,7 +113,7 @@ export function buildEnhancementInput(
     company: filters.company,
     role: filters.role,
     country: filters.country,
-    experience: filters.experience,
+    experience: filters.overall ? -1 : filters.experience,
     currentSalary: filters.currentSalary,
     rating: results.rating,
     salaryRange,
@@ -153,7 +153,7 @@ DATA:
 Company: ${input.company}
 Role: ${input.role}
 Location: ${location}
-Experience: ${input.experience} years
+Experience: ${input.experience < 0 ? 'All levels (overall)' : `${input.experience} years`}
 Current Salary: ${input.currentSalary}
 Rating: ${input.rating !== null ? `${input.rating}/5` : 'Not available'}
 Market Salary Range: ${input.salaryRange}

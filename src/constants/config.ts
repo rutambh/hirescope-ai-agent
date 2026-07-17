@@ -41,6 +41,8 @@ export const APP_CONFIG = {
     // ── Category 4: Site-specific ──
     'site:glassdoor.com {company} {role} {experience} salary {country}',
     'site:ambitionbox.com {company} reviews',
+    'site:teamblind.com {company} reviews',
+    'site:6figr.com {company} salary {country}',
     // ── Category 5: General salary ──
     '{company} {role} {experience} hiring salary package {country}',
     '{company} {role} CTC {experience} experience {country}',
@@ -91,4 +93,4 @@ export const APP_CONFIG = {
 // same launcher icon so a future icon swap only needs the asset replaced
 // (and this path / app.json updated together). Defined here as the single
 // source of truth so screens never hardcode the icon location.
-export const APP_ICON = require('../assets/images/icon.png');
+export const APP_ICON = require('../../assets/images/icon.png');

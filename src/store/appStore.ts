@@ -13,6 +13,8 @@ type AppStore = {
   setMaxDomainsToScrape: (val: number) => void;
   keepScreenOnDefault: boolean;
   setKeepScreenOnDefault: (val: boolean) => void;
+  overallDefault: boolean;
+  setOverallDefault: (val: boolean) => void;
 };
 
 export const useAppStore = create<AppStore>()(
@@ -24,6 +26,8 @@ export const useAppStore = create<AppStore>()(
       setMaxDomainsToScrape: (maxDomainsToScrape) => set({ maxDomainsToScrape }),
       keepScreenOnDefault: true,
       setKeepScreenOnDefault: (keepScreenOnDefault) => set({ keepScreenOnDefault }),
+      overallDefault: true,
+      setOverallDefault: (overallDefault) => set({ overallDefault }),
     }),
     {
       name: 'hirescope-app-store',

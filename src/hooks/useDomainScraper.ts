@@ -217,11 +217,11 @@ function isMultiWordCompany(company: string): boolean {
 }
 
 function buildSearchQuery(
-  company: string, role: string, country: string, experience: number,
+  company: string, role: string, country: string, experience: number | undefined,
   template?: string, forceUnquoted?: boolean
 ): string {
   const location = country;
-  const tpl = template ?? '{company} {role} {country} salary reviews';
+  const tpl = template ?? '{company} {role} {experience} salary reviews';
 
   // Smart quoting: wrap multi-word company names in quotes for phrase-match precision
   // Single-word names are never quoted (quoting a single token adds no benefit)
@@ -229,16 +229,21 @@ function buildSearchQuery(
     ? `"${company}"`
     : company;
 
+  const expStr = experience === undefined
+    ? ''
+    : (experience === 0 ? '0 years' : `${experience} years`);
+  const expYrsStr = experience === undefined
+    ? ''
+    : (experience === 0 ? '0 yrs' : `${experience} yrs`);
+
   let query = tpl
     .replace('{company}', companyToken)
     .replace('{role}', role)
-    .replace('{country}', location);
+    .replace('{country}', location)
+    .replace('{experience} years', expStr)
+    .replace('{experience} yrs', expYrsStr)
+    .replace('{experience}', expStr);
 
-  if (experience > 0) {
-    query = query.replace('{experience}', `${experience} years`);
-  } else {
-    query = query.replace('{experience}', '');
-  }
   return query.replace(/\s+/g, ' ').trim();
 }
 
@@ -318,34 +323,120 @@ function getDomainName(url: string): string {
   }
 }
 
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs: number = 10000
+): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
+
+function isOfficialCompanyWebsite(url: string, company: string): boolean {
+  try {
+    const lcUrl = url.toLowerCase();
+    const domain = getDomainName(url).toLowerCase();
+    const cleanCompany = company.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+    const words = cleanCompany.split(/\s+/).filter(Boolean);
+
+    const hasReviewsOrSalaries =
+      lcUrl.includes('salary') ||
+      lcUrl.includes('review') ||
+      lcUrl.includes('rating') ||
+      lcUrl.includes('compensation') ||
+      lcUrl.includes('ctc') ||
+      lcUrl.includes('wlb') ||
+      lcUrl.includes('culture');
+
+    if (hasReviewsOrSalaries) return false;
+
+    // Check 1: exact match of clean company name, e.g. "advantmed" in "advantmed.com"
+    const joinedCompany = words.join('');
+    if (joinedCompany.length >= 3 && domain.includes(joinedCompany)) {
+      return true;
+    }
+
+    // Check 2: initials match (for multi-word companies like Tata Consultancy Services -> tcs)
+    if (words.length > 1) {
+      const initials = words.map(w => w[0]).join('');
+      if (initials.length >= 2 && (
+        domain === `${initials}.com` ||
+        domain === `${initials}.co.in` ||
+        domain === `${initials}.in` ||
+        domain === `www.${initials}.com` ||
+        domain === `www.${initials}.co.in` ||
+        domain === `www.${initials}.in`
+      )) {
+        return true;
+      }
+
+      // Check 3: first word match, e.g. "tata.com"
+      const firstWord = words[0];
+      if (firstWord.length >= 3 && (
+        domain === `${firstWord}.com` ||
+        domain === `${firstWord}.co.in` ||
+        domain === `${firstWord}.in` ||
+        domain === `www.${firstWord}.com` ||
+        domain === `www.${firstWord}.co.in` ||
+        domain === `www.${firstWord}.in`
+      )) {
+        return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
 export const FAST_LANE_DOMAINS = [
   'kununu.com',
   'teamblind.com',
   'salary.com',
   'shine.com',
+  'sulekha.com',
   'geekster.in',
-  'justdial.com',
-  'sulekha.com'
+  '6figr.com',
+  'talent.com',
+  'fairygodboss.com',
+  'vault.com'
 ];
 
 export function isFastLaneDomain(urlOrDomain: string): boolean {
-  const domain = getDomainName(urlOrDomain) || urlOrDomain.toLowerCase().replace(/^www\./, '');
-  return FAST_LANE_DOMAINS.some(d => domain === d || domain.endsWith('.' + d));
+  const domain = (getDomainName(urlOrDomain) || urlOrDomain.toLowerCase()).replace(/^www\./, '');
+  return FAST_LANE_DOMAINS.some(d => {
+    const baseName = d.split('.')[0];
+    const parts = domain.split('.');
+    return parts.includes(baseName);
+  });
 }
 
 export const WEBVIEW_TIER_DOMAINS = [
   'ambitionbox.com', 'naukri.com', 'careerbliss.com', 'comparably.com',
   'levels.fyi', 'payscale.com', 'inhersight.com', 'glassdoor.com',
   'indeed.com', 'linkedin.com', 'mouthshut.com', 'freshersworld.com',
-  'iimjobs.com', 'hirist.tech', 'geeksforgeeks.org', 'fairygodboss.com',
-  'breakroom.cc', '6figr.com', 'cutshort.io', 'interviewbit.com',
-  'groww.in', 'foundit.in', 'salaryexplorer.com', 'talent.com',
-  'erieri.com', 'vault.com', 'jobily.com', 'timesjobs.com'
+  'iimjobs.com', 'hirist.tech', 'geeksforgeeks.org', 'breakroom.cc',
+  'justdial.com', 'cutshort.io', 'interviewbit.com', 'groww.in',
+  'foundit.in', 'salaryexplorer.com', 'erieri.com', 'jobily.com',
+  'timesjobs.com'
 ];
 
 export function isWebViewTierDomain(urlOrDomain: string): boolean {
-  const domain = getDomainName(urlOrDomain) || urlOrDomain.toLowerCase().replace(/^www\./, '');
-  return WEBVIEW_TIER_DOMAINS.some(d => domain === d || domain.endsWith('.' + d));
+  const domain = (getDomainName(urlOrDomain) || urlOrDomain.toLowerCase()).replace(/^www\./, '');
+  return WEBVIEW_TIER_DOMAINS.some(d => {
+    const baseName = d.split('.')[0];
+    const parts = domain.split('.');
+    return parts.includes(baseName);
+  });
 }
 
 // True if the URL points at a downloadable/binary resource (PDF, Office doc,
@@ -478,6 +569,10 @@ function cleanAndFilterUrls(
     // In Narrow mode, exclude WebView-tier domains that block direct HTTP fetch
     if (researchMode === 'narrow' && isWebViewTierDomain(url)) continue;
 
+    // Exclude official company corporate website (e.g. advantmed.com or tcs.com)
+    // which has no review/salary data and yields NA results.
+    if (isOfficialCompanyWebsite(url, company)) continue;
+
     // Country-specific filtering — drop URLs clearly meant for another region
     const foreignHints = COUNTRY_FOREIGN_HINTS[lcc];
     if (foreignHints && foreignHints.some(s => lower.includes(s))) continue;
@@ -517,11 +612,95 @@ function cleanAndFilterUrls(
   return results;
 }
 
+// ─── SSR JSON & Hydration Extractors ──────────────────────────────────────────
+
+export function extractSsrJson(html: string): any | null {
+  // 1. Try __NEXT_DATA__ block
+  const nextDataMatch = html.match(/<script\b[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+  if (nextDataMatch) {
+    try {
+      return JSON.parse(nextDataMatch[1].trim());
+    } catch (e) {
+      logger.warn('SSR Parser', 'Failed to parse __NEXT_DATA__ JSON');
+    }
+  }
+
+  // 2. Try window.__INITIAL_STATE__ or window.__NEXT_DATA__ inline scripts
+  const initStateMatch = html.match(/window\s*\.\s*__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});/i) ||
+                         html.match(/window\s*\.\s*__NEXT_DATA__\s*=\s*(\{[\s\S]*?\});/i);
+  if (initStateMatch) {
+    try {
+      return JSON.parse(initStateMatch[1].trim());
+    } catch (e) {
+      logger.warn('SSR Parser', 'Failed to parse window.__INITIAL_STATE__ JSON');
+    }
+  }
+
+  // 3. Try any application/json scripts (e.g. fairygodboss.com)
+  const jsonScriptRegex = /<script\b[^>]*type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  while ((match = jsonScriptRegex.exec(html)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      if (parsed && typeof parsed === 'object') {
+        if (JSON.stringify(parsed).length > 200) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+  }
+
+  return null;
+}
+
+export function extractTextFromJson(obj: any): string {
+  const lines: string[] = [];
+  
+  function walk(node: any, path: string = '') {
+    if (node === null || node === undefined) return;
+    if (typeof node === 'string') {
+      const trimmed = node.trim();
+      if (trimmed.length > 0) {
+        const lowerKey = path.toLowerCase();
+        if (lowerKey.includes('pro') && !lowerKey.includes('progress') && !lowerKey.includes('product')) {
+          lines.push(`Pros: ${trimmed}`);
+        } else if (lowerKey.includes('con') && !lowerKey.includes('contact') && !lowerKey.includes('config')) {
+          lines.push(`Cons: ${trimmed}`);
+        } else if (lowerKey.includes('rating')) {
+          lines.push(`Rating: ${trimmed}`);
+        } else if (lowerKey.includes('salary') || lowerKey.includes('ctc') || lowerKey.includes('pay') || lowerKey.includes('compensation')) {
+          lines.push(`Salary: ${trimmed}`);
+        } else {
+          lines.push(trimmed);
+        }
+      }
+    } else if (typeof node === 'number') {
+      const lowerKey = path.toLowerCase();
+      if (lowerKey.includes('rating')) {
+        lines.push(`Rating: ${node}`);
+      } else if (lowerKey.includes('salary') || lowerKey.includes('ctc') || lowerKey.includes('pay') || lowerKey.includes('compensation')) {
+        lines.push(`Salary: ${node}`);
+      } else {
+        lines.push(String(node));
+      }
+    } else if (Array.isArray(node)) {
+      node.forEach((item, index) => walk(item, `${path}[${index}]`));
+    } else if (typeof node === 'object') {
+      for (const [key, value] of Object.entries(node)) {
+        walk(value, path ? `${path}.${key}` : key);
+      }
+    }
+  }
+  
+  walk(obj);
+  return lines.join('\n');
+}
+
 // ─── WebView-based Scraping ───────────────────────────────────────────────────
 
 export function useDomainScraper() {
   const discoverUrls = useCallback(async (
-    company: string, role: string, country: string, experience: number,
+    company: string, role: string, country: string, experience: number | undefined,
     deadlineTimestamp?: number,
     researchMode: 'deep' | 'narrow' = 'deep'
   ): Promise<string[]> => {
@@ -546,13 +725,13 @@ export function useDomainScraper() {
       const url = searchUrl(engine, query);
       try {
         logger.info('Discovery', `Native fetch discovery ${engine} → "${query}"`);
-        const response = await fetch(url, {
+        const response = await fetchWithTimeout(url, {
           headers: {
             'User-Agent': APP_CONFIG.webViewUserAgent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
           }
-        });
+        }, 10000);
         const html = await response.text();
         if (globalCancelled) return;
         
@@ -630,8 +809,17 @@ export function useDomainScraper() {
     // which avoids 64+ serial WebView loads blowing the total timeout.
     for (const template of templates) {
       if (globalCancelled) break;
-      if (allRawUrls.length >= RAW_TARGET) break;
+
+      // Stop early only if we already have enough high-quality URLs after filtering
+      const currentFiltered = cleanAndFilterUrls(allRawUrls, company, country, researchMode);
+      if (currentFiltered.length >= maxDomains) break;
+
       if (deadlineTimestamp && Date.now() >= deadlineTimestamp) break;
+
+      // Skip WebView-tier site-specific queries in Narrow mode
+      if (isNarrow && (template.includes('site:glassdoor.com') || template.includes('site:ambitionbox.com'))) {
+        continue;
+      }
 
       const query = buildSearchQuery(company, role, country, experience, template);
       const urlsBeforeTemplate = allRawUrls.length;
@@ -656,21 +844,29 @@ export function useDomainScraper() {
     }
 
     // ── Pass 2: fill remaining coverage with other engines only if needed ──
-    if (allRawUrls.length < maxDomains) {
+    const initialFilteredCount = cleanAndFilterUrls(allRawUrls, company, country, researchMode).length;
+    if (initialFilteredCount < maxDomains) {
       for (const template of templates) {
         if (globalCancelled) break;
-        if (allRawUrls.length >= RAW_CAP) break;
         if (deadlineTimestamp && Date.now() >= deadlineTimestamp) break;
+
+        // Skip WebView-tier site-specific queries in Narrow mode
+        if (isNarrow && (template.includes('site:glassdoor.com') || template.includes('site:ambitionbox.com'))) {
+          continue;
+        }
 
         const query = buildSearchQuery(company, role, country, experience, template);
         for (const engine of ['bing', 'yahoo', 'startpage']) {
           if (globalCancelled) break;
-          if (allRawUrls.length >= RAW_CAP) break;
           if (deadlineTimestamp && Date.now() >= deadlineTimestamp) break;
+
+          const currentFilteredCount = cleanAndFilterUrls(allRawUrls, company, country, researchMode).length;
+          if (currentFilteredCount >= maxDomains) break;
+
           if (isNarrow) {
-            await runNativeEngineQuery(engine, query, allRawUrls.length < RAW_TARGET);
+            await runNativeEngineQuery(engine, query, currentFilteredCount < maxDomains);
           } else {
-            await runEngineQuery(engine, query, allRawUrls.length < RAW_TARGET);
+            await runEngineQuery(engine, query, currentFilteredCount < maxDomains);
           }
         }
       }
@@ -696,13 +892,13 @@ export function useDomainScraper() {
     if (isFastLaneDomain(url) || researchMode === 'narrow') {
       try {
         logger.info('Scraper', `Native fetch scrape → ${url}`);
-        const response = await fetch(url, {
+        const response = await fetchWithTimeout(url, {
           headers: {
             'User-Agent': APP_CONFIG.webViewUserAgent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
           }
-        });
+        }, 15000);
         if (globalCancelled) return { text: '', quality: 0 };
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
@@ -711,18 +907,29 @@ export function useDomainScraper() {
         const html = await response.text();
         if (globalCancelled) return { text: '', quality: 0 };
 
-        const cleanText = html
-          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
-          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
-          .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, ' ')
-          .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, ' ')
-          .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, ' ')
-          .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, ' ')
-          .replace(/<head\b[^<]*(?:(?!<\/head>)<[^<]*)*<\/head>/gi, ' ')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/&nbsp;/gi, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
+        // Try SSR data extraction first (for next.js, nuxt, etc. sites)
+        const ssrData = extractSsrJson(html);
+        let cleanText = '';
+        if (ssrData) {
+          cleanText = extractTextFromJson(ssrData);
+          logger.info('Scraper', `Parsed SSR hydration data block; extracted ${cleanText.length} characters.`);
+        }
+
+        // Fallback to strip HTML tag rendering if SSR failed or yielded too little text
+        if (!cleanText || cleanText.length < 100) {
+          cleanText = html
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+            .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+            .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, ' ')
+            .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, ' ')
+            .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, ' ')
+            .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, ' ')
+            .replace(/<head\b[^<]*(?:(?!<\/head>)<[^<]*)*<\/head>/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        }
 
         const { isBlocked, reason } = detectLoginWall(cleanText);
         if (isBlocked) {

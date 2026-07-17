@@ -50,6 +50,7 @@ export function useNotification() {
   async function triggerSearchCompleteNotification(company: string, role: string, country: string) {
     try {
       await Notifications.scheduleNotificationAsync({
+        identifier: 'research_progress',
         content: {
           title: 'Research Complete ✅',
           body: `${company} · ${role} · ${country} results are ready`,

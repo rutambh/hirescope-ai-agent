@@ -32,7 +32,7 @@ export function mergeAllResults(
   // 1. Extract structured records from each scraped page
   const records: StructuredRecord[] = rawDataPoints
     .filter(p => p.success && p.rawText.length > 50)
-    .map(p => extractStructuredRecord(p.source, p.rawText, filters.salaryFormat, filters.company, filters.experience));
+    .map(p => extractStructuredRecord(p.source, p.rawText, filters.salaryFormat, filters.company, filters.overall ? undefined : filters.experience));
 
   const sourcesCount = records.length;
   const domainsScraped = sourcesCount;

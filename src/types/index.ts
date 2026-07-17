@@ -8,6 +8,7 @@ export type SearchFilters = {
   company: string;
   role: string;
   experience: number;
+  overall: boolean;
   currentSalary: number;
   currency: string;
   currencyCode: string;
